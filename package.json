@@ -1,0 +1,33 @@
+{
+  "name": "career-agent",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/n4cl/career-agent.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/n4cl/career-agent/issues"
+  },
+  "homepage": "https://github.com/n4cl/career-agent#readme",
+  "devDependencies": {
+    "@types/node": "^24.0.13",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@langchain/langgraph": "^0.3.8",
+    "@langchain/openai": "^0.5.18",
+    "dotenv": "^17.2.0",
+    "langchain": "^0.3.29"
+  }
+}
