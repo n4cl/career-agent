@@ -1,2 +1,4 @@
-node_modules/
-.cursor/
+node_modules
+dist
+.DS_Store
+.cursor
