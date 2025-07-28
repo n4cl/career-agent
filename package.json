@@ -1,12 +1,63 @@
 {
   "name": "career-agent",
-  "version": "1.0.0",
-  "description": "",
+  "version": "0.1.0",
+  "description": "career-agent ===",
   "main": "index.js",
+  "type": "module",
   "directories": {
     "doc": "docs"
   },
+  "dependencies": {
+    "ansi-styles": "^5.2.0",
+    "argparse": "^2.0.1",
+    "base64-js": "^1.5.1",
+    "camelcase": "^6.3.0",
+    "chalk": "^4.1.2",
+    "color-convert": "^2.0.1",
+    "color-name": "^1.1.4",
+    "commander": "^14.0.0",
+    "console-table-printer": "^2.14.6",
+    "decamelize": "^1.2.0",
+    "dotenv": "^17.2.0",
+    "eventemitter3": "^4.0.7",
+    "has-flag": "^4.0.0",
+    "js-tiktoken": "^1.0.20",
+    "js-yaml": "^4.1.0",
+    "jsonpointer": "^5.0.1",
+    "langchain": "^0.3.29",
+    "langsmith": "^0.3.43",
+    "mustache": "^4.2.0",
+    "openai": "^5.9.0",
+    "openapi-types": "^12.1.3",
+    "p-finally": "^1.0.0",
+    "p-queue": "^6.6.2",
+    "p-retry": "^4.6.2",
+    "p-timeout": "^3.2.0",
+    "retry": "^0.13.1",
+    "semver": "^7.7.2",
+    "simple-wcswidth": "^1.1.2",
+    "supports-color": "^7.2.0",
+    "undici-types": "^7.8.0",
+    "uuid": "^10.0.0",
+    "yaml": "^2.8.0",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.24.6"
+  },
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "@typescript-eslint/eslint-plugin": "^8.38.0",
+    "@typescript-eslint/parser": "^8.38.0",
+    "eslint": "^9.32.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.3",
+    "prettier": "^3.6.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
   "scripts": {
+    "start": "ts-node src/cli.ts",
+    "lint": "eslint 'src/**/*.ts'",
+    "format": "prettier --write 'src/**/*.ts'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -19,15 +70,5 @@
   "bugs": {
     "url": "https://github.com/n4cl/career-agent/issues"
   },
-  "homepage": "https://github.com/n4cl/career-agent#readme",
-  "devDependencies": {
-    "@types/node": "^24.0.13",
-    "typescript": "^5.8.3"
-  },
-  "dependencies": {
-    "@langchain/langgraph": "^0.3.8",
-    "@langchain/openai": "^0.5.18",
-    "dotenv": "^17.2.0",
-    "langchain": "^0.3.29"
-  }
+  "homepage": "https://github.com/n4cl/career-agent#readme"
 }
