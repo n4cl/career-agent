@@ -11,40 +11,26 @@
 
 ## 2. システム構成
 
-### 2.1 ディレクトリ構成（抜粋）
+### 2.1 コンポーネントと役割
 
-```
-src/
-  cli.ts              # CLI エントリーポイント
-  agents/
-    profile_agent.ts  # プロフィール生成・閲覧
-    job_agent.ts      # 求人データ解析
-    evaluate_agent.ts # レジュメ × 求人の適合評価
-    report_agent.ts   # レポート生成・閲覧
-profiles/
-  user_profile.json   # 最新プロフィール（Profile Agent が管理）
-reports/
-  *.json / *.md       # 評価結果レポート
-```
-
-### 2.2 コンポーネントと役割
+物理的なファイル構成や使用言語は詳細設計で確定し、本節では論理的な責務分担のみを示す。
 
 | コンポーネント | 役割 | 主な入出力 |
 | --- | --- | --- |
-| `src/cli.ts` | コマンド解析と各エージェント呼び出し | ユーザー入力 → 各エージェント関数 |
+| CLIエントリーポイント | コマンド解析と各エージェント呼び出し | ユーザー入力 → 各エージェント関数 |
 | Profile Agent | 職務経歴・キャリアプランを解析してプロフィール JSON を生成／閲覧し、不足情報があれば対話的ヒアリングで補完 | 入力: ユーザー提供テキスト（貼り付け／質問回答／`--file` 指定の文書）<br>出力: `profiles/user_profile.json` |
 | Job Agent | 求人票を解析し、構造化データを生成 | 入力: 求人票ファイル<br>出力: `job_data/*.json` など |
 | Evaluate Agent | プロフィールと求人データから適合度評価を算出 | 入力: プロフィール JSON・求人 JSON<br>出力: 評価結果 JSON |
 | Report Agent | 評価結果の整形表示／保存／一覧化 | 入力: 評価結果 JSON<br>出力: Markdown/JSON レポート、一覧 |
 
-### 2.3 永続化ポリシー
+### 2.2 永続化ポリシー
 
 - プロフィール: `profiles/user_profile.json`
 - 求人解析結果: `job_data/<job-id>.json`（生成先はオプションで指定）
 - 評価結果レポート: `reports/<timestamp>_<job-id>.json` など
 - 記録フォーマットは JSON を基準とし、利用者が次のエージェントに渡しやすい構造を保持する。
 
-### 2.4 外部依存
+### 2.3 外部依存
 
 - LLM 呼び出し: Profile Agent（プロフィール抽出・対話）、Evaluate Agent（適合度評価）など
 - ファイル I/O: 各エージェントが成果物を読み書き
