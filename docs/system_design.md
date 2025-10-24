@@ -18,7 +18,7 @@
 | コンポーネント | 役割 | 主な入出力 |
 | --- | --- | --- |
 | CLIエントリーポイント | コマンド解析と各エージェント呼び出し | ユーザー入力 → 各エージェント関数 |
-| Profile Agent | 職務経歴・キャリアプランを解析してプロフィール JSON を生成／閲覧し、不足情報があれば対話的ヒアリングで補完 | 入力: ユーザー提供テキスト（貼り付け／質問回答／`--file` 指定の文書）<br>出力: `profiles/user_profile.json` |
+| Profile Agent | 職務経歴・キャリアプランを解析してプロフィール JSON を生成・逐次更新し、不足情報があれば対話的ヒアリングで補完。セッションログやバックアップも管理する | 入力: ユーザー提供テキスト（貼り付け／質問回答／`--file` 指定の文書）<br>出力: `profiles/user_profile.json` ほか |
 | Job Agent | 求人票を解析し、構造化データを生成 | 入力: 求人票ファイル<br>出力: `job_data/*.json` など |
 | Evaluate Agent | プロフィールと求人データから適合度評価を算出 | 入力: プロフィール JSON・求人 JSON<br>出力: 評価結果 JSON |
 | Report Agent | 評価結果の整形表示／保存／一覧化 | 入力: 評価結果 JSON<br>出力: Markdown/JSON レポート、一覧 |
@@ -26,6 +26,8 @@
 ### 2.2 永続化ポリシー
 
 - プロフィール: `profiles/user_profile.json`
+- プロフィールバックアップ: `profiles/backups/<timestamp>.json`
+- プロフィールセッションログ: `profiles/session_logs/<timestamp>_<mode>.json`
 - 求人解析結果: `job_data/<job-id>.json`（生成先はオプションで指定）
 - 評価結果レポート: `reports/<timestamp>_<job-id>.json` など
 - 記録フォーマットは JSON を基準とし、利用者が次のエージェントに渡しやすい構造を保持する。
@@ -65,101 +67,30 @@
    3. 必要に応じて `report generate` / `report show`
 
 3. **プロフィールの部分更新**
-   1. `profile update --fields skills,values --file notes/skill-updates.md`
+   1. `profile update --fields career.skills,plan.preferences --file notes/career-notes.md`
    2. LLM との対話で不足情報を補完しつつ対象領域を再生成（ヒアリングを省略する場合は `--no-interactive` を付与）
 
-## 4. 処理フロー
+## 4. フロー概要
+
+> 詳細な処理手順や分岐ロジックは各詳細設計書（例: `docs/profile_agent_design.md`）に集約する。基本設計では主要フェーズと成果物の関係のみを押さえる。
 
 ### 4.1 `profile create`
 
-```mermaid
-sequenceDiagram
-    participant CLI
-    participant ProfileAgent
-    participant LLM
-
-    CLI->>ProfileAgent: create(inputSources, interactiveEnabled)
-    ProfileAgent->>ProfileAgent: 入力テキストを統合（貼り付け/ファイル読み込み）
-    opt 対話ヒアリング (既定)
-        ProfileAgent->>LLM: 不足情報の特定・質問生成プロンプト
-        LLM-->>ProfileAgent: 質問リスト
-        loop 足りない項目ごと
-            ProfileAgent->>CLI: ユーザーへ質問
-            CLI-->>ProfileAgent: 回答を受け取る
-        end
-    end
-    ProfileAgent->>LLM: プロフィール抽出プロンプト
-    LLM-->>ProfileAgent: プロフィール JSON
-    ProfileAgent->>ProfileAgent: 検証 & profiles/user_profile.json を保存
-    ProfileAgent-->>CLI: 作成結果メッセージ
-```
+- CLI が入力チャンク（貼り付け・ファイル・QA）と設定を Profile Agent に渡す。
+- Profile Agent がプロフィール生成を実行し、欠損があればヒアリングや差分再生成で補完する。
+- 最終的なプロフィールを検証後、バックアップ・セッションログとともに保存する。
+- 詳細フローは `docs/profile_agent_design.md` を参照。
 
 ### 4.2 `profile update`
 
-```mermaid
-sequenceDiagram
-    participant CLI
-    participant ProfileAgent
-    participant LLM
-
-    CLI->>ProfileAgent: update(targetFields, inputSources, interactiveEnabled)
-    ProfileAgent->>ProfileAgent: 現状プロフィールを読み込み
-    ProfileAgent->>ProfileAgent: 追加テキストを統合しつつ対象フィールドの欠損チェック
-    opt 対話ヒアリング (既定)
-        ProfileAgent->>LLM: 質問候補生成
-        loop 欠損フィールドごと
-            ProfileAgent->>CLI: ユーザーに追加質問
-            CLI-->>ProfileAgent: 回答を記録
-        end
-    end
-    ProfileAgent->>LLM: 指定フィールドの再生成プロンプト
-    LLM-->>ProfileAgent: 更新データ
-    ProfileAgent->>ProfileAgent: マージ & 保存
-    ProfileAgent-->>CLI: 更新結果メッセージ
-```
+- 既存プロフィールを読み込み、指定フィールドと追加入力を基に再生成を行う。
+- 必要に応じてヒアリングで不足情報を補完し、差分をマージして保存する。
 
 ### 4.3 `job parse`
 
-```mermaid
-sequenceDiagram
-    participant CLI
-    participant JobAgent
-    participant LLM
+- CLI が求人票ソースと保存先を渡し、Job Agent が構造化データを生成・検証して保存する。
 
-    CLI->>JobAgent: parse(jobPath, outPath?)
-    JobAgent->>JobAgent: 求人票を読み込み
-    JobAgent->>LLM: 構造化プロンプト
-    LLM-->>JobAgent: 求人 JSON
-    JobAgent->>JobAgent: 検証・保存
-    JobAgent-->>CLI: 保存先を返す
-```
+### 4.4 `evaluate score` と `report generate`
 
-### 4.4 `evaluate score` + `report generate`
-
-```mermaid
-sequenceDiagram
-    participant CLI
-    participant EvaluateAgent
-    participant ReportAgent
-    participant LLM
-
-    CLI->>EvaluateAgent: score(profilePath, jobPath, outPath?)
-    EvaluateAgent->>EvaluateAgent: 入力読み込み
-    EvaluateAgent->>LLM: 評価プロンプト
-    LLM-->>EvaluateAgent: 適合スコア JSON
-    EvaluateAgent->>EvaluateAgent: 保存
-    EvaluateAgent-->>CLI: 評価結果パス
-
-    CLI->>ReportAgent: generate(evaluationPath, format)
-    ReportAgent->>ReportAgent: 評価結果読み込み
-    ReportAgent->>ReportAgent: テンプレ適用・整形
-    ReportAgent->>ReportAgent: レポート保存
-    ReportAgent-->>CLI: レポートパス
-```
-
-## 5. 今後の拡張
-
-- **半自動フローのテンプレ化**: よく使う手順をスクリプト化し、ユーザーの手動操作を最小化。
-- **対話的ヒアリングの充実**: Profile Agent の質問テンプレートや回答ストレージを拡張し、再利用可能な知識ベース化を検討。
-- **軽量オーケストレーション**: 定番フローが固まった段階で、小規模なルールベースワークフロー（もしくは LLM プランナー）を導入する余地を残す。
-- **マルチユーザー対応**: プロフィール／レポートの保存先をユーザーごとに分離し、サブエージェント API を再利用できるようにする。
+- Evaluate Agent がプロフィールと求人データを受け取り、適合度スコアを算出して永続化する。
+- Report Agent が評価結果をもとに指定フォーマットでレポートを整形・保存する。
