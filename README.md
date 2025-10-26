@@ -8,22 +8,16 @@ career-agent
 
 このリポジトリでは Python 3.13 (`.python-version` 参照) と uv を前提とします。uv のインストール済みであることを想定し、以下の手順で環境を準備してください。
 
-1. **仮想環境の作成**
+1. **依存関係の同期**
    ```bash
-   uv venv .venv
+   uv sync
    ```
 
 2. **仮想環境の有効化**
    - macOS / Linux: `source .venv/bin/activate`
    - Windows (PowerShell): `.\.venv\Scripts\activate`
 
-3. **依存関係の同期**
-   `uv.lock` に固定された依存を同期します。
-   ```bash
-   uv pip sync uv.lock
-   ```
-
-4. **動作確認**
+3. **動作確認**
    ```bash
    pytest -q
    ```
