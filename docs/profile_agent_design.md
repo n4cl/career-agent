@@ -404,45 +404,57 @@ sequenceDiagram
 
 ### 9.1.1 処理フロー詳細 (create)
 
-1. **セッション初期化**  
-   CLI 層が `ProfileSession` を構築する。標準入力で受け取った貼り付けテキスト、`--file` で指定されたファイル、既定で有効な対話設定（`interactive=True`）などをまとめ、入力チャンクを `session.input_chunks` として渡す。既存プロフィールが存在する場合は、安全策としてエージェント側で上書き可否を確認する。
+#### セッション初期化
+- CLI 層が `ProfileSession` を構築し、貼り付けテキスト・`--file` 指定ファイル・既定値 `interactive=True` などをまとめる。
+- `session.input_chunks` を初期化して LangGraph に渡す準備を行う。
+- 既存プロフィールが存在する場合は、エージェント側で上書き可否を確認する。
 
-2. **既存ファイル検査とバックアップ準備**  
-   Profile Agent が保存先 (`profiles/user_profile.json`) を確認し、ファイルが存在する場合は `session.force_overwrite` の有無をチェック。上書きが許可されている場合は、処理成功時に健全なバックアップを取れるようバックアップ先パスも決定しておく。
+#### 既存ファイル検査とバックアップ準備
+- 保存先 (`profiles/user_profile.json`) の存在確認を実施する。
+- `session.force_overwrite` が False の場合は処理を中断、True の場合はバックアップ先パスを先に決定する。
 
-3. **入力チャンク統合と前処理**  
-   貼り付けテキストやファイル内容を読み込み、メタ情報（チャンクID、ソース種別、オリジナルパスなど）を付加。Markdown → プレーンテキスト化など必要な前処理を施し、プロンプト生成で利用しやすい形に整形する。
+#### 入力チャンク統合と前処理
+- テキスト入力とファイル内容を読み込み、チャンク ID・ソース種別・オリジナルパスなどのメタ情報を付与する。
+- Markdown をプレーンテキストへ正規化するなど、後段のプロンプト生成に備えた整形を行う。
 
-4. **初回プロフィール生成**  
-   後続の欠損判定やヒアリングの精度を高めるため、現時点のチャンクを使って暫定プロフィールを生成する。以下の流れを基本単位として以後も繰り返す。  
-   1. チャンク統合内容をもとに LLM へプロフィール生成を依頼  
-   2. 受け取った JSON をスキーマ検証  
-   3. バリデーションを通過したら暫定プロフィールを保持（オンメモリまたは一時ファイル）  
-   4. 必須フィールドが欠けている場合は欠損一覧を更新
+#### 初回プロフィール生成
+- 現時点のチャンクを使って暫定プロフィールを生成し、欠損判定の基礎データを得る。
+- 基本サイクルは以下の通り。
+  - LLM へプロフィール生成を依頼し、JSON を受領する。
+  - 受け取った JSON をスキーマ検証する。
+  - バリデーション通過後は暫定プロフィールを保持し、欠損フィールド一覧を更新する。
 
-5. **ヒアリング (対話モードの場合)**  
-   `session.interactive` が True の場合、欠損候補をもとに LLM へ「追加で確認すべき質問」を問い合わせる。返ってきた質問リストを順番に CLI へ表示し、ユーザーの応答を受け取って `session.input_chunks` に `type="qa"` として追記する。質問は 1 循環ごとに欠損状況を再評価し、十分に補完できた段階でヒアリングを終了する。`--no-interactive` 指定時は本ステップをスキップし、未充足項目を警告として記録する。
+#### ヒアリング（対話モード）
+- `session.interactive` が True の場合、欠損候補から追加質問を LLM に生成させる。
+- CLI に質問を提示し、ユーザー回答を `type="qa"` のチャンクとして追記する。
+- 1 サイクルごとに欠損状況を再評価し、十分に補完できた段階で終了する。
+- `--no-interactive` 指定時は質問生成をスキップし、未補完項目を警告として記録する。
 
-6. **逐次プロフィール更新**  
-   ヒアリングで新しい回答が得られるたびに、チャンク統合→プロフィール生成→スキーマ検証を再実行する。プロンプトでは差分更新を指示し、既に確定済みのフィールドは保持する。逐次更新はコストが増えるため、実装では以下の工夫を検討する。  
-   - 差分プロンプト: 変更対象フィールドのみ LLM に伝える。  
-   - バッチ更新: 質問数件分をまとめて再生成し、呼び出し回数を抑える。  
-   - 再利用キャッシュ: 同一チャンク構成なら先行結果を再利用する。
+#### 逐次プロフィール更新
+- 新しい回答が得られるたびに、チャンク統合→プロフィール生成→スキーマ検証を再実行する。
+- コストを抑えるための工夫例:
+  - 差分プロンプトで更新対象フィールドだけを指示する。
+  - 質問数件分をまとめて再生成する。
+  - 同一チャンク構成時には結果キャッシュを再利用する。
 
-7. **終了判定**  
-   欠損リストが空になった／もしくはユーザーが「これ以上補足しない」と明示した場合はヒアリングを終える。`--no-interactive` やユーザー中断時には、未補完項目の一覧を `warnings` として保持する。
+#### 終了判定
+- 欠損リストが空になった、またはユーザーが補足終了を宣言した時点でヒアリングを終える。
+- 未補完項目が残る場合は `warnings` に記録して後段へ引き継ぐ。
 
-8. **最終バリデーション**  
-   最後に再度プロフィール生成・検証を実施し、保存してよい状態かを確認する。連続失敗時はエラーメッセージを返却し処理を中断する。
+#### 最終バリデーション
+- 保存前に改めてプロフィール生成とスキーマ検証を実行し、結果が整合していることを確認する。
+- 検証に連続で失敗する場合はエラーを返却し処理を中断する。
 
-9. **バックアップと書き込み**  
-   ファイルが存在していた場合はまず既存プロフィールを `profiles/backups/<timestamp>.json` にコピーし、その後新しい JSON を `profiles/user_profile.json` に保存する。保存時は UTF-8、2 スペースインデントで整形し、読みやすさを保つ。
+#### バックアップと書き込み
+- 既存プロフィールがある場合は `profiles/backups/<timestamp>.json` にコピーしてから上書きする。
+- 新しい JSON を `profiles/user_profile.json` に保存し、UTF-8 かつ 2 スペースインデントで整形する。
 
-10. **セッションログ保存**  
-    ヒアリングで投げた質問とユーザー回答、欠損項目の補完状況などを `profiles/session_logs/<timestamp>_create.json` に書き出す。`--no-interactive` の場合は警告欄に未補完フィールドを記録する。
+#### セッションログ保存
+- 質問と回答、欠損補完状況などを `profiles/session_logs/<timestamp>_create.json` に記録する。
+- `--no-interactive` の場合は未補完フィールド一覧をログに残す。
 
-11. **結果返却**  
-    CLI に対して成功メッセージを返し、保存先パスや警告（未補完箇所がある場合）を併せて通知する。CLI はこれをそのままユーザーへ表示する。
+#### 結果返却
+- CLI へ成功メッセージと保存先パスを返し、必要に応じて警告情報も伝える。
 
 ### 9.2 `profile update`
 
@@ -491,4 +503,58 @@ sequenceDiagram
         ProfileAgent->>ProfileAgent: ハイライト付テキスト整形
     end
     ProfileAgent-->>CLI: 出力文字列
+```
+
+## 10. モジュール構成とアーキテクチャ
+
+### 10.1 モジュール一覧
+
+- `profile_agent.cli`
+  - Typer ベースの CLI コマンド群。
+  - セッションビルダー呼び出しと LangGraph ワークフロー実行のエントリーポイント。
+- `profile_agent.session`
+  - CLI からの入力値を正規化してセッション辞書を組み立てる。
+  - 今後、セッション ID・タイムスタンプ・LangSmith 連携用メタデータの注入もこの層で担う。
+- `profile_agent.workflow`
+  - LangGraph グラフ定義 (`graph.py`) とステート (`state.py`)、各処理フェーズのノード (`nodes/`) を保持。
+  - ノードは「入力収集」「欠損検知」「質問生成」「回答取り込み」「プロフィール生成」「スキーマ検証」「永続化」などで分割する。
+- `profile_agent.schema`
+  - プロフィール JSON のスキーマ定義とバリデーションロジックを集約する。
+  - Pydantic / JSON Schema など、採用するバリデーションツールの境界面を提供する。
+- `profile_agent.prompts`
+  - LLM 向けプロンプトテンプレートとプロファイル特有のフォーマット調整を保持する領域。
+  - 他エージェントで共通化しづらい部分を閉じ込める。
+- `agent_core.io`
+  - ファイル入出力やバックアップ作成を担当する共通ユーティリティ。
+  - プロフィールエージェント以外からも再利用できる抽象 API を提供する。
+- `agent_core.llm`
+  - LLM 呼び出し、LangSmith トレーシング、外部 API 連携などの共通サービス層。
+  - プロンプト生成は各エージェント側（`profile_agent.prompts`）で行い、このモジュールにはモデル選定・リトライ制御・モニタリングといった横断的処理を収める。
+- `profile_agent.main`
+  - CLI 以外から利用する際の高レベル API を提供するファサードを想定。
+  - `agent_core` の抽象コンポーネントと `profile_agent.workflow` を組み合わせて公開する。
+
+### 10.2 モジュール間の関係
+
+```mermaid
+graph TD
+    CLI["CLI<br/>profile_agent.cli"] --> Session["Session<br/>profile_agent.session"]
+    Session --> Workflow["Workflow<br/>workflow.graph"]
+    Workflow --> Collect["Collect<br/>nodes.collect_input"]
+    Workflow --> Detect["Missing<br/>nodes.detect_missing"]
+    Workflow --> Ask["Questions<br/>nodes.generate_questions"]
+    Workflow --> Ingest["Answers<br/>nodes.ingest_answers"]
+    Workflow --> Profile["Profile<br/>nodes.build_profile"]
+    Workflow --> Validate["Validate<br/>nodes.validate_schema"]
+    Workflow --> Persist["Persist<br/>nodes.persist_profile"]
+    Collect --> IO["IO<br/>agent_core.io"]
+    Persist --> IO
+    Profile --> Services["LLM<br/>agent_core.llm"]
+    Ask --> Services
+    SchemaMod["Schema<br/>profile_agent.schema"] --> Validate
+    SchemaMod --> Profile
+    Prompts["Prompts<br/>profile_agent.prompts"] --> Profile
+    Prompts --> Ask
+    Services -.-> LangSmith["Tracing<br/>LangSmith"]
+    IO -.-> Storage["Storage<br/>profiles/ etc."]
 ```
