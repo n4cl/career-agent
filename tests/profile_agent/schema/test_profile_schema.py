@@ -3,103 +3,97 @@ from __future__ import annotations
 import pytest
 
 from profile_agent.schema.profile import (
-    CareerEntry,
-    Profile,
-    ProfileMetadata,
+    ProfileDraft,
+    ProfileValidationError,
+    detect_missing_fields,
+    finalize_profile,
+    parse_profile,
     ProfilePlan,
-    ProfileSummary,
-    load_profile,
 )
 
 
-def test_load_profile_returns_profile_dataclass() -> None:
-    """辞書入力が適切に Profile データクラスへ変換されることを確認する。"""
+def test_parse_profile_returns_complete_draft() -> None:
+    """必須項目が揃っているときは欠損が空のドラフトを返す。"""
     raw = {
         "metadata": {
             "name": "山田太郎",
             "last_updated": "2025-10-27",
-            "experience_years": 8,
         },
         "summary": {
             "headline": "バックエンドエンジニア",
             "summary": "SaaS 企業で API 開発を担当。",
-            "strengths": ["アーキテクチャ設計"],
-            "skills": ["Python", "FastAPI"],
         },
         "career": [
-            {
-                "company": "Acme Inc.",
-                "role": "Backend Engineer",
-                "start_date": "2020-01",
-                "end_date": None,
-                "achievements": ["REST API のリファクタリング"],
-            }
+            {"company": "Acme", "role": "Backend Engineer"},
         ],
-        "plan": {
-            "wants_to_do": "テックリードとして改善活動を推進",
-            "interests": ["分散システム"],
-        },
+        "plan": {"wants_to_do": "テックリードを目指す"},
     }
 
-    profile = load_profile(raw)
+    draft = parse_profile(raw)
 
-    assert isinstance(profile, Profile)
-    assert profile.metadata == ProfileMetadata(
-        name="山田太郎",
-        last_updated="2025-10-27",
-        experience_years=8,
-    )
-    assert profile.summary == ProfileSummary(
-        headline="バックエンドエンジニア",
-        summary="SaaS 企業で API 開発を担当。",
-        strengths=["アーキテクチャ設計"],
-        skills=["Python", "FastAPI"],
-        certifications=[],
-    )
-    assert profile.career == [
-        CareerEntry(
-            company="Acme Inc.",
-            role="Backend Engineer",
-            start_date="2020-01",
-            end_date=None,
-            achievements=["REST API のリファクタリング"],
-        )
-    ]
-    assert profile.plan == ProfilePlan(
-        wants_to_do="テックリードとして改善活動を推進",
-        interests=["分散システム"],
-        preferences=None,
-        avoid=None,
-    )
+    assert isinstance(draft, ProfileDraft)
+    assert draft.is_complete()
+    assert draft.profile.metadata.name == "山田太郎"
+    assert draft.profile.summary.headline == "バックエンドエンジニア"
+    assert draft.profile.career[0].company == "Acme"
+    assert isinstance(draft.profile.plan, ProfilePlan)
 
 
-def test_load_profile_requires_core_fields() -> None:
-    """必須フィールドが欠けている場合は ValueError を送出する。"""
+def test_parse_profile_collects_missing_fields_without_exception() -> None:
+    """欠損があっても例外にならず、missing_fields に記録される。"""
     raw = {
         "metadata": {},
-        "summary": {"headline": "headline"},
+        "summary": {"headline": "", "summary": ""},
         "career": [],
     }
 
-    with pytest.raises(ValueError) as excinfo:
-        load_profile(raw)
+    draft = parse_profile(raw)
 
-    message = str(excinfo.value)
-    assert "metadata.name" in message
-    assert "summary.summary" in message
+    assert sorted(draft.missing_fields) == [
+        "career",
+        "metadata.name",
+        "summary.headline",
+        "summary.summary",
+    ]
 
 
-def test_load_profile_validates_career_entries() -> None:
-    """キャリア項目に必須情報が欠けている場合はエラーとなる。"""
-    raw = {
-        "metadata": {"name": "山田太郎"},
-        "summary": {"headline": "headline", "summary": "summary"},
-        "career": [
-            {"company": "Example"},  # role が欠けている
-        ],
-    }
+def test_finalize_profile_raises_when_missing_fields_exist() -> None:
+    """欠損が残っているドラフトは finalize でエラーになる。"""
+    draft = parse_profile(
+        {
+            "metadata": {"name": ""},
+            "summary": {"headline": "headline", "summary": ""},
+            "career": [{"company": "Acme", "role": ""}],
+        }
+    )
 
-    with pytest.raises(ValueError) as excinfo:
-        load_profile(raw)
+    with pytest.raises(ProfileValidationError) as excinfo:
+        finalize_profile(draft)
 
-    assert "career[0].role" in str(excinfo.value)
+    assert "metadata.name" in excinfo.value.missing_fields
+    assert "summary.summary" in excinfo.value.missing_fields
+    assert "career[0].role" in excinfo.value.missing_fields
+
+
+def test_detect_missing_fields_after_updates() -> None:
+    """ドラフトに追記後、欠損検出を再計算して解消できる。"""
+    draft = parse_profile(
+        {
+            "metadata": {"name": ""},
+            "summary": {"headline": "headline", "summary": ""},
+            "career": [{"company": "", "role": "Engineer"}],
+        }
+    )
+
+    draft.profile.metadata.name = "山田太郎"
+    draft.profile.summary.summary = "自己紹介"
+    draft.profile.career[0].company = "Acme"
+
+    missing = detect_missing_fields(draft.profile)
+
+    assert missing == []
+    # finalize も成功することを確認
+    completed = finalize_profile(
+        ProfileDraft(profile=draft.profile, missing_fields=missing)
+    )
+    assert completed.metadata.name == "山田太郎"

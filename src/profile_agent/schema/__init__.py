@@ -3,17 +3,25 @@
 from .profile import (
     CareerEntry,
     Profile,
+    ProfileDraft,
     ProfileMetadata,
     ProfilePlan,
     ProfileSummary,
-    load_profile,
+    ProfileValidationError,
+    detect_missing_fields,
+    finalize_profile,
+    parse_profile,
 )
 
 __all__ = [
     "CareerEntry",
     "Profile",
+    "ProfileDraft",
     "ProfileMetadata",
     "ProfilePlan",
     "ProfileSummary",
-    "load_profile",
+    "ProfileValidationError",
+    "detect_missing_fields",
+    "finalize_profile",
+    "parse_profile",
 ]

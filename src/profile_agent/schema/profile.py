@@ -1,4 +1,4 @@
-"""プロフィールスキーマ定義とロードロジック."""
+"""プロフィールスキーマ定義とドラフト/最終バリデーション."""
 
 from __future__ import annotations
 
@@ -59,8 +59,29 @@ class Profile:
     plan: ProfilePlan | None = None
 
 
-def load_profile(data: Mapping[str, Any]) -> Profile:
-    """辞書データから Profile データクラスへ変換する."""
+@dataclass(slots=True)
+class ProfileDraft:
+    """プロフィール生成途中のドラフト."""
+
+    profile: Profile
+    missing_fields: list[str]
+
+    def is_complete(self) -> bool:
+        """欠損項目が無いかを判定する。"""
+        return not self.missing_fields
+
+
+class ProfileValidationError(ValueError):
+    """プロフィール確定時の未充足エラー."""
+
+    def __init__(self, missing_fields: Sequence[str]):
+        fields = sorted(set(missing_fields))
+        super().__init__(f"missing required fields: {', '.join(fields)}")
+        self.missing_fields = fields
+
+
+def parse_profile(data: Mapping[str, Any]) -> ProfileDraft:
+    """辞書データからドラフトを構築し、欠損項目を収集する。"""
     metadata_raw, metadata_missing = _require_mapping(data.get("metadata"), "metadata")
     summary_raw, summary_missing = _require_mapping(data.get("summary"), "summary")
     career_raw = data.get("career")
@@ -70,44 +91,72 @@ def load_profile(data: Mapping[str, Any]) -> Profile:
     career, career_errors = _build_career(career_raw)
     plan = _build_plan(data.get("plan"))
 
-    missing = (
-        metadata_missing
-        + summary_missing
-        + metadata_errors
-        + summary_errors
-        + career_errors
+    profile = Profile(metadata=metadata, summary=summary, career=career, plan=plan)
+    missing = sorted(
+        set(
+            metadata_missing
+            + summary_missing
+            + metadata_errors
+            + summary_errors
+            + career_errors
+            + detect_missing_fields(profile)
+        )
     )
 
-    if missing:
-        raise ValueError(f"missing required fields: {', '.join(sorted(set(missing)))}")
+    return ProfileDraft(profile=profile, missing_fields=missing)
 
-    return Profile(metadata=metadata, summary=summary, career=career, plan=plan)
+
+def finalize_profile(draft: ProfileDraft) -> Profile:
+    """ドラフトを検証し、未充足があればエラーを出して確定させる。"""
+    missing = detect_missing_fields(draft.profile)
+    if missing:
+        raise ProfileValidationError(missing)
+    return draft.profile
+
+
+def detect_missing_fields(profile: Profile) -> list[str]:
+    """プロフィール内の必須欠損を列挙する。"""
+    missing: list[str] = []
+
+    if not profile.metadata.name.strip():
+        missing.append("metadata.name")
+
+    if not profile.summary.headline.strip():
+        missing.append("summary.headline")
+    if not profile.summary.summary.strip():
+        missing.append("summary.summary")
+
+    if not profile.career:
+        missing.append("career")
+    else:
+        for idx, entry in enumerate(profile.career):
+            if not entry.company.strip():
+                missing.append(f"career[{idx}].company")
+            if not entry.role.strip():
+                missing.append(f"career[{idx}].role")
+
+    return sorted(set(missing))
 
 
 def _require_mapping(
     value: Any,
     field_name: str,
-    nested_prefix: str | None = None,
 ) -> tuple[Mapping[str, Any], list[str]]:
     if not isinstance(value, Mapping):
         return {}, [field_name]
-    missing: list[str] = []
-    if nested_prefix and not value:
-        missing.append(nested_prefix)
-    return value, missing
+    return value, []
 
 
 def _build_metadata(
     metadata_raw: Mapping[str, Any],
 ) -> tuple[ProfileMetadata, list[str]]:
+    missing: list[str] = []
     name = metadata_raw.get("name")
     if not name:
-        missing = ["metadata.name"]
-    else:
-        missing = []
+        missing.append("metadata.name")
 
     return ProfileMetadata(
-        name=name or "",
+        name=_coerce_str(name) or "",
         birth_year=_coerce_int(metadata_raw.get("birth_year")),
         experience_years=_coerce_int(metadata_raw.get("experience_years")),
         location=_coerce_str(metadata_raw.get("location")),
@@ -118,20 +167,18 @@ def _build_metadata(
 def _build_summary(
     summary_raw: Mapping[str, Any],
 ) -> tuple[ProfileSummary, list[str]]:
+    missing: list[str] = []
     headline = summary_raw.get("headline")
-    summary = summary_raw.get("summary")
+    summary_text = summary_raw.get("summary")
 
     if not headline:
-        missing = ["summary.headline"]
-    else:
-        missing = []
-
-    if not summary:
+        missing.append("summary.headline")
+    if not summary_text:
         missing.append("summary.summary")
 
     return ProfileSummary(
-        headline=headline or "",
-        summary=summary or "",
+        headline=_coerce_str(headline) or "",
+        summary=_coerce_str(summary_text) or "",
         strengths=_ensure_str_list(summary_raw.get("strengths")),
         skills=_ensure_str_list(summary_raw.get("skills")),
         certifications=_ensure_str_list(summary_raw.get("certifications")),
@@ -163,8 +210,8 @@ def _build_career(
 
         entries.append(
             CareerEntry(
-                company=company or "",
-                role=role or "",
+                company=_coerce_str(company) or "",
+                role=_coerce_str(role) or "",
                 start_date=_coerce_str(item.get("start_date")),
                 end_date=_coerce_str(item.get("end_date")),
                 achievements=_ensure_str_list(item.get("achievements")),
@@ -209,6 +256,8 @@ def _coerce_str(value: Any) -> str | None:
         return None
     if isinstance(value, str):
         return value
+    if isinstance(value, bytes):
+        return value.decode()
     return str(value)
 
 
@@ -216,12 +265,13 @@ def _ensure_str_list(value: Any) -> list[str]:
     if not value:
         return []
     if isinstance(value, (str, bytes)):
-        return [value.decode() if isinstance(value, bytes) else value]
+        coerced = _coerce_str(value)
+        return [coerced] if coerced else []
     if isinstance(value, Sequence):
         result: list[str] = []
         for item in value:
-            if item is None:
-                continue
-            result.append(item.decode() if isinstance(item, bytes) else str(item))
+            coerced = _coerce_str(item)
+            if coerced:
+                result.append(coerced)
         return result
     return []
