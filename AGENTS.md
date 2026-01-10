@@ -1,47 +1,52 @@
-# 開発ガイドライン
+# AI-DLC and Spec-Driven Development
 
-本ガイドは開発時のルールを整理したものです。
-開発中に疑問が生じた場合は本ドキュメントを参照します。
+Kiro-style Spec Driven Development implementation on AI-DLC (AI Development Life Cycle)
 
-## 技術スタック
-- **使用言語**: Python（既定で Python 3.13 以上を推奨）。
-- **依存管理**: `uv` を用い、手動インストールしたパッケージは必ず依存リストに追加する。
+## Project Memory
+Project memory keeps persistent guidance (steering, specs notes, component docs) so Codex honors your standards each run. Treat it as the long-lived source of truth for patterns, conventions, and decisions.
 
-## 開発ワークフロー (テスト駆動開発)
-1. 実装対象を洗い出し、期待振る舞いをテストコードで定義する（`tests/` 以下）。
-2. 失敗するテストを確認してから、`src/` 以下に最小限の実装を追加する。
-3. テストを緑にした後でリファクタリングを行い、再度全テストを実行して回帰を防ぐ。
-4. バグ修正時も必ず再発防止テストを先に追加する。
+- Use `.kiro/steering/` for project-wide policies: architecture principles, naming schemes, security constraints, tech stack decisions, api standards, etc.
+- Use local `AGENTS.md` files for feature or library context (e.g. `src/lib/payments/AGENTS.md`): describe domain assumptions, API contracts, or testing conventions specific to that folder. Codex auto-loads these when working in the matching path.
+- Specs notes stay with each spec (under `.kiro/specs/`) to guide specification-level workflows.
 
-## ディレクトリおよび命名
-- アプリ実装は `src/` 直下に配置し、モジュール名は機能単位で分割する。
-- テストは `tests/` に鏡写しのパス構成で配置（例: `src/profile/agent.py` → `tests/profile/test_agent.py`）。
-- 共通テストデータは `tests/fixtures/` を用意し、実データや秘匿情報を置かない。
+## Project Context
 
-## コーディング規約
-- インデント・命名・長すぎる行といった PEP 8 の主要ルールを基本として設計するが、必要に応じて例外をレビューで判断する。
-- `ruff check` で `E/W/F/I` を検出し、指摘箇所は自動整形に頼らず手作業で修正する。`ruff --fix` や `ruff format` はデフォルトでは利用しない。
-- すべての関数・メソッド・モジュールスコープのシンボルに型ヒントを付与する。`mypy` を用いて型検査し、エージェントが利用する API 面は `--strict` で通ることを目標にする。
-- 公開関数や複雑な処理には簡潔な docstring を付け、引数・戻り値・例外の意図を明文化する。
-- プライベート関数であっても、副作用が分かりづらい場合は docstring やコメントで目的を補足する。
-- 関数の戻り値以外で状態を返す「アウトパラメータ」的な実装（リストを引数で受け渡して編集する等）は禁止する。複数情報を返す場合はタプルや結果オブジェクトを用いる。
+### Paths
+- Steering: `.kiro/steering/`
+- Specs: `.kiro/specs/`
 
-## 例外処理とロギング
-- CLI/エージェントから呼ばれる層では `logging` モジュールを使い、`print` はデバッグ・テスト専用に限定する。
-- `except Exception` のような握りつぶしは避け、標準例外か独自例外クラスにマッピングして再送出する。
-- 例外メッセージにはユーザーへの影響とリカバリー手段を含め、セッションログに必要な情報を残す。
+### Steering vs Specification
 
-## テスト運用
-- テストランナーは `pytest` を採用し、`pytest -q` を最低限の実行コマンドとする。
-- 主要ユースケースはパラメタライズで網羅し、LLM 呼び出しなど外部依存はモックを使用する。
-- 各テスト関数（モジュール含む）には簡潔な docstring を付け、テスト目的・前提条件を明記する。
+**Steering** (`.kiro/steering/`) - Guide AI with project-wide rules and context
+**Specs** (`.kiro/specs/`) - Formalize development process for individual features
 
-## 品質ツール
-- `ruff` で静的解析と lint を実施し、CI で `ruff check` を必須ステップに含める。
+### Active Specifications
+- Check `.kiro/specs/` for active specifications
+- Use `/prompts:kiro-spec-status [feature-name]` to check progress
 
-## バージョン管理
-- 1 機能 1 ブランチを原則とし、ブランチ名は `feature/<short-desc>` 形式とする。
+## Development Guidelines
+- Think in English, generate responses in Japanese. All Markdown content written to project files (e.g., requirements.md, design.md, tasks.md, research.md, validation reports) MUST be written in the target language configured for this specification (see spec.json.language).
 
-## セキュリティとデータ
-- API キーや個人情報は `.env` などの外部ファイルで管理し、リポジトリには決してコミットしない。
-- プロフィールやセッションログ生成時はテスト用ダミーデータを使用し、本番データは含めない。
+## Minimal Workflow
+- Phase 0 (optional): `/prompts:kiro-steering`, `/prompts:kiro-steering-custom`
+- Phase 1 (Specification):
+  - `/prompts:kiro-spec-init "description"`
+  - `/prompts:kiro-spec-requirements {feature}`
+  - `/prompts:kiro-validate-gap {feature}` (optional: for existing codebase)
+  - `/prompts:kiro-spec-design {feature} [-y]`
+  - `/prompts:kiro-validate-design {feature}` (optional: design review)
+  - `/prompts:kiro-spec-tasks {feature} [-y]`
+- Phase 2 (Implementation): `/prompts:kiro-spec-impl {feature} [tasks]`
+  - `/prompts:kiro-validate-impl {feature}` (optional: after implementation)
+- Progress check: `/prompts:kiro-spec-status {feature}` (use anytime)
+
+## Development Rules
+- 3-phase approval workflow: Requirements → Design → Tasks → Implementation
+- Human review required each phase; use `-y` only for intentional fast-track
+- Keep steering current and verify alignment with `/prompts:kiro-spec-status`
+- Follow the user's instructions precisely, and within that scope act autonomously: gather the necessary context and complete the requested work end-to-end in this run, asking questions only when essential information is missing or the instructions are critically ambiguous.
+
+## Steering Configuration
+- Load entire `.kiro/steering/` as project memory
+- Default files: `product.md`, `tech.md`, `structure.md`
+- Custom files are supported (managed via `/prompts:kiro-steering-custom`)
