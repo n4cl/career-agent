@@ -6,10 +6,10 @@
 ## Requirements
 
 ### Requirement 1 (Common): Execution Context per Agent
-**Objective:** Ensure each agent run (Profile/Job/Evaluate) starts with a clean, mode-specific execution context so that preconditions are satisfied before the workflow executes.
+**Objective:** 各エージェント実行（Profile/Job/Evaluate）が前提を満たした状態で開始できるよう、モード別の実行コンテキストを用意する。
 
 #### Acceptance Criteria
-1. When a profile command is run with text inputs, the system shall normalize non-empty strings, preserve their order, and keep them in a profile-mode context.  
+1. When a profile command is run with text inputs, the system shall normalize non-empty strings, preserve their order, and keep them in a profile-mode execution context.  
    - ※ profile 実行時は入力を正規化し順序を保ってプロファイル用コンテキストに保持する。
 2. When a job-parse command is run with file inputs, the system shall verify readability, preserve order, and keep them in a job-mode context.  
    - ※ job parse ではファイルの存在/読込可否を確認し、順序を保ってジョブ用コンテキストに保持する。
@@ -19,7 +19,7 @@
    - ※ オプションはコンテキストに反映し、未指定は妥当なデフォルトで補う。
 
 ### Requirement 2 (Common): Conversation Block Management
-**Objective:** Keep user inputs and agent outputs in a single ordered conversation block list with clear roles and sources, enabling traceability and reuse across nodes.
+**Objective:** ユーザー入力とエージェント応答を、役割と出所が明示された順序付きの会話ブロックとして一元管理し、追跡性と再利用性を高める。
 
 #### Acceptance Criteria
 1. When input collection begins with no existing blocks, the system shall create user blocks with sequential identifiers, role=user, source=text, and original content.  
@@ -38,7 +38,7 @@
    - ※ source は text/file/qa（user）と agent_output（agent）に限定し、拡張は要件追加で行う。
 
 ### Requirement 3 (Common): Workflow Construction
-**Objective:** Provide a reproducible LangGraph workflow that can be safely extended or customized.
+**Objective:** LangGraph ワークフローを再現性高く組み立て、拡張・差し替えを安全に行えるようにする。
 
 #### Acceptance Criteria
 1. The default workflow shall start with input collection and finish with validation.  
@@ -53,7 +53,7 @@
    - ※ 不要な状態を書き換えない。
 
 ### Requirement 4 (Common): Persistence, Backup, Logging
-**Objective:** Handle saves, backups, and trace logs safely to prevent data loss and unclear operations.
+**Objective:** 保存・バックアップ・ログを安全に扱い、データ損失や不明瞭な操作を防ぐ。
 
 #### Acceptance Criteria
 1. If a profile already exists and overwrite is not allowed, the system shall abort saving with an error.  
@@ -67,53 +67,41 @@
 5. If the save destination does not exist, the system shall create it or fail with a clear error.  
    - ※ 保存先が無ければ作成するか明示的にエラーを返す。
 
-### Requirement 5 (Profile Agent): Profile Structuring and Missing Detection
-**Objective:** Build a structured profile and surface missing required elements.
+### Requirement 5 (Profile Agent): Profile Lifecycle (Build, Complete, Update)
+**Objective:** プロフィールを構造化し、欠損を明示し、対話で補完し、必要な領域のみを安全に更新して整合性を保つ。
 
 #### Acceptance Criteria
 1. When raw profile information is provided, the system shall construct a structured profile covering metadata, summary, career, and plan.  
    - ※ 生データをメタデータ・サマリ・経歴・プランを含む構造に組み立てる。
 2. If required profile elements are missing or empty, the system shall collect them as a missing list without raising immediately.  
    - ※ 必須欠損は一覧化し、即時エラーにしない。
-3. When finalizing and missing items remain, the system shall report an error.  
+3. When finalizing the profile and missing items remain, the system shall report an error.  
    - ※ 確定時に欠損が残ればエラー。
-4. When finalizing and no missing items remain, the system shall return the profile without exception.  
+4. When finalizing the profile and no missing items remain, the system shall return the profile without exception.  
    - ※ 欠損がなければ正常に返す。
 5. If primitive value conversion fails, the system shall treat the result as empty rather than throwing an exception.  
    - ※ 型変換失敗は空扱いとし例外にしない。
-
-### Requirement 6 (Profile Agent): Interactive Completion
-**Objective:** Fill missing profile information through optional dialogue and allow the user to stop.
-
-#### Acceptance Criteria
-1. If required items are missing and interactive mode is enabled, the system shall prepare follow-up questions for those gaps before finalizing.  
+6. If required profile items are missing and interactive mode is enabled, the system shall prepare follow-up questions for those gaps before finalizing.  
    - ※ 欠損＋対話モード時は不足項目への追質問を用意する。
-2. When answers are received, the system shall record them in the conversation history and re-evaluate missing items.  
-   - ※ 回答を記録し欠損を再判定する。
-3. If the user ends the interview or attempts are exhausted, the system shall stop questioning and record remaining gaps as warnings.  
+7. When answers are received, the system shall record them in the conversation history and re-evaluate missing items.  
+   - ※ 回答を記録し、欠損を再判定する。
+8. If the user ends the interview or attempts are exhausted, the system shall stop questioning and record remaining gaps as warnings.  
    - ※ 打ち切り時は残りの欠損を警告として残す。
-4. Where interactive mode is disabled, the system shall skip question generation and keep missing items as warnings while continuing processing.  
-   - ※ 非対話モードでは質問せず警告のみ残す。
-5. The system shall log asked questions and answers for traceability.  
-   - ※ 質問と回答を履歴に残す。
+9. Where interactive mode is disabled, the system shall skip question generation and keep missing items as warnings while continuing processing.  
+   - ※ 非対話モードでは質問せず、欠損を警告として残したまま進める。
+10. When running in update mode, the system shall load the existing profile before applying changes.  
+    - ※ 更新開始時に現行プロフィールを読む。
+11. Where update targets are specified, the system shall limit regeneration and merging to those areas, leaving others unchanged.  
+    - ※ 指定範囲のみ書き換え、他は保持する。
+12. If no existing profile is found in update mode, the system shall stop with an error before regeneration.  
+    - ※ 既存が無ければ開始せずエラー。
+13. When merging regenerated parts, the system shall keep untouched parts and return a coherent profile.  
+    - ※ マージ後も整合したプロフィールを返す。
+14. If update targets are unknown, the system shall warn and create or skip them according to policy (never silently drop them).  
+    - ※ 未知指定は警告し、方針に従い生成またはスキップする。
 
-### Requirement 7 (Profile Agent): Partial Update
-**Objective:** Update only requested profile parts without harming other areas.
-
-#### Acceptance Criteria
-1. When running in update mode, the system shall load the existing profile before applying changes.  
-   - ※ 更新開始時に現行プロフィールを読む。
-2. Where update targets are specified, the system shall limit regeneration and merging to those areas, leaving others unchanged.  
-   - ※ 指定範囲のみ書き換え、他は保持する。
-3. If no existing profile is found, the system shall stop with an error before regeneration.  
-   - ※ 既存が無ければ開始せずエラー。
-4. When merging regenerated parts, the system shall keep untouched parts and return a coherent profile.  
-   - ※ マージ後も整合したプロフィールを返す。
-5. If update targets are unknown, the system shall warn and create or skip them according to policy (never silently drop them).  
-   - ※ 未知指定は警告し、方針に従い生成またはスキップする。
-
-### Requirement 8 (Job Agent): Job Parsing
-**Objective:** Convert job inputs into structured data usable by later evaluation.
+### Requirement 6 (Job Agent): Job Parsing
+**Objective:** 求人入力を、後続の評価で利用できる構造化データに変換する。
 
 #### Acceptance Criteria
 1. When `job parse --file <path>` is run, the system shall read the job input and produce structured job data.  
@@ -127,8 +115,8 @@
 5. Where multiple job inputs are provided, the system shall process each and write separate outputs without unintended overwrites.  
    - ※ 複数入力は個別に出力し、意図しない上書きをしない。
 
-### Requirement 9 (Evaluate Agent): Suitability Scoring
-**Objective:** Produce evaluation data from profile and job inputs with clear rationale.
+### Requirement 7 (Evaluate Agent): Suitability Scoring
+**Objective:** プロフィールと求人入力から、根拠付きの評価データを生成する。
 
 #### Acceptance Criteria
 1. When `evaluate score --profile <path> --job <path>` is run, the system shall load both inputs and produce evaluation data including scores and rationale.  
@@ -142,8 +130,8 @@
 5. If scoring cannot be completed (e.g., missing critical fields), the system shall emit a clear error and may list blocking fields.  
    - ※ 必須欠損などでスコア不可なら阻害要因を示すエラーを返す。
 
-### Requirement 10 (Meta Evaluation): LLM-Based Comparison and Summary
-**Objective:** Provide LLM-generated comparisons/summaries of evaluation results for downstream decision-making.
+### Requirement 8 (Meta Evaluation): LLM-Based Comparison and Summary
+**Objective:** 評価結果を LLM で比較・要約し、後続の意思決定に活用できる形で提供する。
 
 #### Acceptance Criteria
 1. When `evaluate summarize --evals <path...>` is run, the system shall load the evaluation results and prompt LLM to produce a comparative summary (strengths, risks, rationale).  
