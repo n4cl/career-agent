@@ -62,37 +62,37 @@
    - ※ 保存先が無ければ作成するか明示的にエラーを返す。
 
 ### Requirement 5 (Profile Agent): Profile Lifecycle (Build, Complete, Update)
-**Objective:** プロフィールを構造化し、欠損を明示し、対話で補完し、必要な領域のみを安全に更新して整合性を保つ。
+**Objective:** プロフィールを「構造化する → 必須欠損を洗い出す → 対話で補完する（任意） → 必要な領域だけ安全に更新する」一連の流れで扱い、常に整合性のとれたプロフィールを返す。
 
 #### Acceptance Criteria
 1. When raw profile information is provided, the system shall construct a structured profile covering metadata, summary, career, and plan.  
-   - ※ 生データをメタデータ・サマリ・経歴・プランを含む構造に組み立てる。
+   - ※ 生のプロフィール情報を受け取ったら、メタデータ・サマリ・経歴・プランの4セクションを持つ構造化プロフィールに組み立てる。
 2. If required profile elements are missing or empty, the system shall collect them as a missing list without raising immediately.  
-   - ※ 必須欠損は一覧化し、即時エラーにしない。
+   - ※ 必須項目の抜けや空値はエラーにせず「欠損リスト」として蓄える。
 3. When finalizing the profile and missing items remain, the system shall report an error.  
-   - ※ 確定時に欠損が残ればエラー。
+   - ※ プロフィールを確定するときに欠損が残っていればエラーにする。
 4. When finalizing the profile and no missing items remain, the system shall return the profile without exception.  
-   - ※ 欠損がなければ正常に返す。
+   - ※ 欠損がなければ例外なく確定プロフィールを返す。
 5. If primitive value conversion fails, the system shall treat the result as empty rather than throwing an exception.  
-   - ※ 型変換失敗は空扱いとし例外にしない。
+   - ※ 数値/文字列などの型変換に失敗しても例外にせず「空」として扱う。
 6. If required profile items are missing and interactive mode is enabled, the system shall prepare follow-up questions for those gaps before finalizing.  
-   - ※ 欠損＋対話モード時は不足項目への追質問を用意する。
+   - ※ 欠損があり対話モードなら、確定前に不足項目を埋めるための質問を用意する。
 7. When answers are received, the system shall record them in the conversation history and re-evaluate missing items.  
-   - ※ 回答を記録し、欠損を再判定する。
+   - ※ 回答を会話履歴に記録し、欠損リストを再計算する。
 8. If the user ends the interview or attempts are exhausted, the system shall stop questioning and record remaining gaps as warnings.  
-   - ※ 打ち切り時は残りの欠損を警告として残す。
+   - ※ ユーザーが終了する/試行上限に達したら質問を止め、残った欠損を警告として残す。
 9. Where interactive mode is disabled, the system shall skip question generation and keep missing items as warnings while continuing processing.  
-   - ※ 非対話モードでは質問せず、欠損を警告として残したまま進める。
+   - ※ 非対話モードでは質問を出さず、欠損を警告として残したまま処理を続行する。
 10. When running in update mode, the system shall load the existing profile before applying changes.  
-    - ※ 更新開始時に現行プロフィールを読む。
+    - ※ 更新モードでは必ず既存プロフィールを読み込んでから変更を始める。
 11. Where update targets are specified, the system shall limit regeneration and merging to those areas, leaving others unchanged.  
-    - ※ 指定範囲のみ書き換え、他は保持する。
+    - ※ 更新対象が指定されていれば、その範囲だけ再生成・マージし、他の部分は保護する。
 12. If no existing profile is found in update mode, the system shall stop with an error before regeneration.  
-    - ※ 既存が無ければ開始せずエラー。
+    - ※ 既存プロフィールが無ければ再生成を始めずエラーにする。
 13. When merging regenerated parts, the system shall keep untouched parts and return a coherent profile.  
-    - ※ マージ後も整合したプロフィールを返す。
+    - ※ マージ後も未変更部分を保持した整合性のあるプロフィールを返す。
 14. If update targets are unknown, the system shall warn and create or skip them according to policy (never silently drop them).  
-    - ※ 未知指定は警告し、方針に従い生成またはスキップする。
+    - ※ 更新対象が不明な場合は警告し、ポリシーに従って生成またはスキップする（黙殺しない）。
 
 ### Requirement 6 (Job Agent): Job Parsing
 **Objective:** 求人入力を、後続の評価で利用できる構造化データに変換する。
