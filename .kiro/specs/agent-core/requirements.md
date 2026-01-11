@@ -69,20 +69,20 @@
    - ※ 生のプロフィール情報を受け取ったら、メタデータ・サマリ・経歴・プランの4セクションを持つ構造化プロフィールに組み立てる。
 2. If required profile elements are missing or empty, the system shall collect them as a missing list without raising immediately.  
    - ※ 必須項目の抜けや空値はエラーにせず「欠損リスト」として蓄える。
-3. When finalizing the profile and missing items remain, the system shall report an error.  
-   - ※ プロフィールを確定するときに欠損が残っていればエラーにする。
-4. When finalizing the profile and no missing items remain, the system shall return the profile without exception.  
-   - ※ 欠損がなければ例外なく確定プロフィールを返す。
+3. When finalizing the profile and missing items remain, the system shall save it as incomplete (with the missing list) rather than raising an error.  
+   - ※ 確定時に欠損が残っていてもエラーにせず、欠損リスト付きの「未完了」として保存する。
+4. When finalizing the profile and no missing items remain, the system shall save it as complete and return it.  
+   - ※ 欠損がなければ「完了」として保存し、返す。
 5. If primitive value conversion fails, the system shall treat the result as empty rather than throwing an exception.  
    - ※ 数値/文字列などの型変換に失敗しても例外にせず「空」として扱う。
 6. If required profile items are missing and interactive mode is enabled, the system shall prepare follow-up questions for those gaps before finalizing.  
    - ※ 欠損があり対話モードなら、確定前に不足項目を埋めるための質問を用意する。
 7. When answers are received, the system shall record them in the conversation history and re-evaluate missing items.  
    - ※ 回答を会話履歴に記録し、欠損リストを再計算する。
-8. If the user ends the interview or attempts are exhausted, the system shall stop questioning and record remaining gaps as warnings.  
-   - ※ ユーザーが終了する/試行上限に達したら質問を止め、残った欠損を警告として残す。
-9. Where interactive mode is disabled, the system shall skip question generation and keep missing items as warnings while continuing processing.  
-   - ※ 非対話モードでは質問を出さず、欠損を警告として残したまま処理を続行する。
+8. If the user ends the interview or attempts are exhausted, the system shall stop questioning and save the profile as incomplete with remaining gaps recorded.  
+   - ※ ユーザーが終了する/試行上限に達したら質問を止め、残欠損を記録した未完了状態で保存する。
+9. Where interactive mode is disabled, the system shall skip question generation; if required items remain missing at finalize time, it shall save an incomplete draft (with missing list) and report incompleteness instead of producing a completed profile.  
+   - ※ 非対話モードでは質問を出さず進め、確定時に必須欠損が残っていれば欠損リスト付きの未完了ドラフトとして保存し、不完了であることを報告する（完成版は返さない）。
 10. When running in update mode, the system shall load the existing profile before applying changes.  
     - ※ 更新モードでは必ず既存プロフィールを読み込んでから変更を始める。
 11. Where update targets are specified, the system shall limit regeneration and merging to those areas, leaving others unchanged.  
@@ -93,6 +93,8 @@
     - ※ マージ後も未変更部分を保持した整合性のあるプロフィールを返す。
 14. If update targets are unknown, the system shall warn and create or skip them according to policy (never silently drop them).  
     - ※ 更新対象が不明な場合は警告し、ポリシーに従って生成またはスキップする（黙殺しない）。
+15. When no existing profile is present and a new profile is requested, the system shall build a profile from user inputs alone, apply the same missing-field handling, and save to the default profile destination.  
+    - ※ 既存プロフィールが無い状態で新規作成する場合、ユーザー入力だけで組み立て、欠損処理は同じルールで行い、既定の保存先に保存する。
 
 ### Requirement 6 (Job Agent): Job Parsing
 **Objective:** 求人入力を、後続の評価で利用できる構造化データに変換する。
