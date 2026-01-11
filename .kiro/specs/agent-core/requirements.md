@@ -54,8 +54,8 @@
    - ※ 上書き禁止ならエラーで中断。
 2. Where overwriting is allowed, the system shall back up the existing profile before writing a new one.  
    - ※ 上書き時は先にバックアップを取る。
-3. The system shall save execution logs (including questions and warnings) to the designated log destination.  
-   - ※ 質問・警告を含むログを所定の保存先に残す。
+3. The system shall save execution logs to the designated log destination, including questions, warnings, and a reference to the user inputs consumed in that run; sensitive data shall follow the project’s masking/hash policy.  
+   - ※ 質問・警告に加え、その実行で消費したユーザー入力の参照を所定の保存先に残す（機微情報はマスク/ハッシュのポリシーに従う）。
 4. The system shall write profiles in a human-readable, UTF-8 formatted form.  
    - ※ 可読な UTF-8 形式で書き出す。
 5. If the save destination does not exist, the system shall create it or fail with a clear error.  
