@@ -120,28 +120,28 @@
    - ※ ユーザーが手動で取得した求人テキスト（コピペ等）は、元サイトの利用規約に従う前提で受け付ける。
 
 ### Requirement 7 (Evaluate Agent): Suitability Scoring and LLM Summary
-**Objective:** プロフィールと求人の構造化データ（Requirement 5/6 で得られた出力と同等スキーマ）を用いて適合度を算出し、LLM による自動フィルタ・重み付け・比較要約を通じて意思決定に活用できる形で提供する。
+**Objective:** プロフィールと求人の構造化データ（Requirement 5/6 に準拠したスキーマ）を用いて適合度を算出し、LLM による自動フィルタ・重み付け・比較要約を通じて意思決定に活用できる形で提供する。
 
 #### Acceptance Criteria
-1. When `evaluate score --profile <path> --job <path>` is run, the system shall load both inputs and produce evaluation data including scores and rationale.  
-   - ※ プロフィールと求人を読み込み、スコアと根拠を含む評価データを生成する。
-2. If either input is missing or invalid, the system shall return an error without emitting partial results.  
-   - ※ いずれかが無効ならエラーとし部分的な結果を出さない。
-3. Where an output path is provided, the system shall write the evaluation there; otherwise it shall save to a default evaluations location, following the persistence policy in Requirement 4.  
-   - ※ 出力先未指定なら既定の評価保存先に保存し、保存ポリシーは Requirement 4 に従う。
-4. The system shall record references to the profile/job sources in the evaluation output.  
-   - ※ 評価結果に利用元の参照情報を含める。
-5. If scoring cannot be completed (e.g., missing critical fields), the system shall emit a clear error and may list blocking fields.  
+1. When an evaluation is requested with both profile data and job data, the system shall load them and produce evaluation results that include scores and rationale.  
+   - ※ プロフィールと求人の両データを読み込み、スコアと根拠を含む評価結果を生成する。
+2. If either required input is missing or invalid, the system shall return an error without emitting partial results.  
+   - ※ どちらかが欠落・不正なら部分結果を出さずにエラーとする。
+3. Where an output destination is specified, the system shall write the evaluation there; otherwise it shall save to the default evaluation storage, following the persistence policy in Requirement 4.  
+   - ※ 出力先指定が無い場合は既定の評価保存先に保存し、保存ポリシーは Requirement 4 に従う。
+4. The system shall record references to the profile and job sources in every evaluation output.  
+   - ※ 評価結果には必ずプロフィール／求人の参照情報を含める。
+5. If scoring cannot be completed (e.g., missing critical fields), the system shall emit a clear error and may list blocking elements.  
    - ※ 必須欠損などでスコア不可なら阻害要因を示すエラーを返す。
-6. When `evaluate summarize --evals <path...>` is run, the system shall load evaluation results and use LLM to: (a) auto-select relevant evaluations via natural-language filters, (b) apply weighting/ordering, and (c) produce a comparative summary (strengths, risks, rationale).  
-   - ※ `evaluate summarize` で評価結果を読み込み、LLM が自然言語フィルタや重み付けを自動適用しつつ比較要約を生成する。
-7. If only one evaluation is provided, the system shall produce a summary (not a comparison) and note that a single source was used.  
-   - ※ 1件のみなら要約とし、単一ソースである旨を明記する。
-8. If any evaluation input is missing or invalid, the system shall fail with a clear error before calling LLM.  
+6. When a summary/comparison is requested over one or more evaluations, the system shall load the evaluations and use LLM to: (a) auto-select relevant items via natural-language filters, (b) apply weighting/ordering, and (c) produce a comparative summary of strengths, risks, and rationale.  
+   - ※ 複数評価の要約/比較要求時は、LLM が自然言語フィルタと重み付けを適用し、強み・リスク・根拠を含む比較要約を生成する。
+7. If only one evaluation is provided, the system shall generate a summary (not a comparison) and note that a single source was used.  
+   - ※ 1件のみの場合は比較ではなく要約とし、単一ソース利用である旨を明記する。
+8. If any evaluation input is missing or invalid, the system shall fail with a clear error before invoking LLM.  
    - ※ 不正/欠落があれば LLM 呼び出し前にエラーとする。
-9. The system shall include provenance (sources, timestamp) in the LLM prompt and returned summary metadata.  
+9. The system shall include provenance (sources, timestamp) in both the LLM prompt and the returned summary metadata.  
    - ※ ソースと時刻をプロンプトと結果メタに含める。
-10. The system shall save the LLM-produced summary/comparison to a comparisons output path (default timestamped) without altering source evaluations, following the persistence policy in Requirement 4.  
-    - ※ 要約/比較を既定または指定の保存先に書き出し、元の評価は変更しない（保存ポリシーは Requirement 4 に従う）。
+10. The system shall save LLM-produced summaries/comparisons to comparison storage (default timestamped) without altering source evaluations, following the persistence policy in Requirement 4.  
+    - ※ 要約/比較は既定または指定の保存先に書き出し、元の評価は変更しない（保存ポリシーは Requirement 4 に従う）。
 11. Human-facing rendering (e.g., HTML/Markdown UI) is out of scope and handled in a separate Web application specification.  
     - ※ 表示UIは別スペックで扱う。
