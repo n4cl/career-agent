@@ -96,20 +96,28 @@
 15. When no existing profile is present and a new profile is requested, the system shall build a profile from user inputs alone, apply the same missing-field handling, and save to the default profile destination.  
     - ※ 既存プロフィールが無い状態で新規作成する場合、ユーザー入力だけで組み立て、欠損処理は同じルールで行い、既定の保存先に保存する。
 
-### Requirement 6 (Job Agent): Job Parsing
-**Objective:** 求人入力を、後続の評価で利用できる構造化データに変換する。
+### Requirement 6 (Job Agent): Job and Company Parsing
+**Objective:** 求人入力を後続評価で使える構造化データに変換し、入力に含まれる会社情報を分離保持しつつ、必要に応じて許可された情報源から会社情報を補完する。求人検索はポリシーに反しない範囲でオプションとする。
 
 #### Acceptance Criteria
-1. When `job parse --file <path>` is run, the system shall read the job input and produce structured job data.  
-   - ※ 求人入力を読み込み、構造化データを生成する。
-2. If no output path is provided, the system shall save the result to a default job-data location.  
-   - ※ 出力先未指定なら既定の保存先に保存する。
-3. If the input file is missing or unreadable, the system shall emit an error and stop without creating output.  
+1. When a job parsing request is issued with one or more job inputs, the system shall read each input and produce structured job data.  
+   - ※ 求人入力を受けたら読み込み、構造化データを生成する。
+2. If company-related information is present, the system shall extract it into a separate company section within the same job output.  
+   - ※ 会社情報が含まれる場合は同一出力内で会社セクションとして分離して保持する。
+3. If company information is missing or partial and the company-lookup option is enabled, the system shall attempt to enrich the company section using permitted sources (user-provided inputs or approved APIs) and record provenance; if no permitted source is available, it shall warn and proceed without enrichment.  
+   - ※ 会社情報が不足しており会社参照オプションが有効な場合、許可された情報源（ユーザー提供や承認済みAPI）で補完を試み、出所を記録する。取得不能なら警告を出して補完せず続行する。
+4. If no output destination is specified, the system shall save the result to the default job-data location.  
+   - ※ 出力先未指定なら既定の求人データ保存先に保存する。
+5. If a job input is missing or unreadable, the system shall emit an error and stop without creating output.  
    - ※ 入力が無い/読めない場合はエラーで中断し出力しない。
-4. The system shall include metadata such as source path and parsing timestamp in the job output.  
-   - ※ 元パスと解析時刻をメタとして含める。
-5. Where multiple job inputs are provided, the system shall process each and write separate outputs without unintended overwrites.  
+6. The system shall include source metadata (e.g., input identifier/path) and parsing timestamp in the output.  
+   - ※ 元の識別子やパス、解析時刻などのメタを結果に含める。
+7. Where multiple job inputs are provided, the system shall process each and write separate outputs without unintended overwrites.  
    - ※ 複数入力は個別に出力し、意図しない上書きをしない。
+8. The system shall not crawl or scrape external job sites; job data and any company enrichment must come from user-supplied inputs or explicitly permitted APIs/sources.  
+   - ※ 外部求人サイトのクローリングやスクレイピングは行わず、求人・会社補完ともユーザー提供または明示的に許可されたAPI/ソースのみを扱う。
+9. Manually provided job text (e.g., user copy-paste) is accepted for processing, subject to the source’s terms of use.  
+   - ※ ユーザーが手動で取得した求人テキスト（コピペ等）は、元サイトの利用規約に従う前提で受け付ける。
 
 ### Requirement 7 (Evaluate Agent): Suitability Scoring and LLM Summary
 **Objective:** プロフィールと求人の構造化データ（Requirement 5/6 で得られた出力と同等スキーマ）を用いて適合度を算出し、LLM による自動フィルタ・重み付け・比較要約を通じて意思決定に活用できる形で提供する。
