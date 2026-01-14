@@ -99,6 +99,10 @@
     - ※ 更新対象が不明な場合は警告し、ポリシーに従って生成またはスキップする（黙殺しない）。
 15. When no existing profile is present and a new profile is requested, the system shall build a profile from user inputs alone, apply the same missing-field handling, and save to the default profile destination.  
     - ※ 既存プロフィールが無い状態で新規作成する場合、ユーザー入力だけで組み立て、欠損処理は同じルールで行い、既定の保存先に保存する。
+16. When age or address information is provided, the system shall store age as an age band and address as a prefecture-level value only.  
+    - ※ 年齢や住所情報がある場合、年齢は年齢帯、住所は都道府県レベルに丸めて保持する。
+17. When certifications are provided, the system shall store them as a list of strings in the profile.  
+    - ※ 資格情報がある場合、文字列リストとしてプロフィールに保持する。
 
 ### Requirement 6 (Job Tool): Job and Company Parsing
 **Objective:** Job Tool は求人入力を後続評価で使える構造化データに変換し、入力に含まれる会社情報を分離保持しつつ、必要に応じて許可された情報源から会社情報を補完する。求人検索はポリシーに反しない範囲でオプションとする。

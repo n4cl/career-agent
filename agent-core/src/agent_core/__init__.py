@@ -11,4 +11,5 @@ __all__ = [
     "storage",
     "log_writer",
     "artifact_writer",
+    "profile_tool",
 ]
