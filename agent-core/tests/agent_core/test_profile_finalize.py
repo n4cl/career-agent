@@ -8,8 +8,8 @@ from pathlib import Path
 from agent_core.profile_tool import ProfileDraft, ProfileToolImpl
 
 
-def test_finalize_marks_incomplete_when_summary_missing(tmp_path: Path) -> None:
-    """要約が欠ける場合は未完了として保存する。"""
+def test_finalize_allows_empty_summary_when_career_present(tmp_path: Path) -> None:
+    """要約が空でも経歴があれば完了として保存する。"""
     draft = ProfileDraft(
         metadata={},
         summary="",
@@ -23,11 +23,11 @@ def test_finalize_marks_incomplete_when_summary_missing(tmp_path: Path) -> None:
     tool = ProfileToolImpl(output_path=tmp_path / "profile.json")
     result = tool.finalize(draft)
 
-    assert result.status == "incomplete"
-    assert result.missing == ["summary"]
+    assert result.status == "complete"
+    assert result.missing == []
     saved = json.loads((tmp_path / "profile.json").read_text(encoding="utf-8"))
-    assert saved["status"] == "incomplete"
-    assert saved["missing"] == ["summary"]
+    assert saved["status"] == "complete"
+    assert saved["missing"] == []
 
 
 def test_finalize_marks_incomplete_when_career_missing(tmp_path: Path) -> None:

@@ -12,4 +12,5 @@ __all__ = [
     "log_writer",
     "artifact_writer",
     "profile_tool",
+    "profile_agent",
 ]

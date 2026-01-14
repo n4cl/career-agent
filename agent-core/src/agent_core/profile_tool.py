@@ -116,7 +116,7 @@ class ProfileToolImpl:
 
     def finalize(self, draft: ProfileDraft) -> ProfileResult:
         """ドラフトを保存して完了判定を返す。"""
-        missing = _detect_missing(draft)
+        missing = detect_missing(draft)
         status: Literal["incomplete", "complete"] = (
             "complete" if not missing else "incomplete"
         )
@@ -142,11 +142,9 @@ class ProfileToolImpl:
         return result
 
 
-def _detect_missing(draft: ProfileDraft) -> list[str]:
+def detect_missing(draft: ProfileDraft) -> list[str]:
     """欠損項目を検出する。"""
     missing: list[str] = []
-    if not draft.summary.strip():
-        missing.append("summary")
     if not any(item.strip() for item in draft.career):
         missing.append("career")
     return missing
