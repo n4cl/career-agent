@@ -15,12 +15,12 @@
 > セクション順は必要に応じて入れ替えてよい（例: 要件トレーサビリティを前へ、データモデルをアーキテクチャ付近へ）。各セクション内は **概要 → 範囲 → 決定事項 → 影響/リスク** の流れを維持する。
 
 ## 概要 
-キャリアエージェントのコア機能（プロフィール生成、求人解析、適合度評価）を CLI から一貫した実行フローで扱う設計を定義する。各エージェントは LangGraph を用いたワークフローとして動作し、入力の正規化、状態管理、永続化、ログ記録までを共通基盤で統合する。
+キャリアエージェントのコア機能（プロフィール生成、求人解析、適合度評価）を CLI から一貫した実行フローで扱う設計を定義する。Profile Tool / Job Tool は LangGraph を用いたワークフローとして動作し、Profile Agent は対話補完を担う。入力の正規化、状態管理、永続化、ログ記録は共通基盤で統合する。
 
 本設計は単一ユーザー運用を前提に、欠損のある入力でもドラフト保存を許容し、必要時に評価や比較を LLM に委譲できる構成とする。統合オーケストレーターは持たず、CLI または外部スクリプトが各エージェントを個別に実行してフローを構成する。CLI はコアサービスの呼び出しアダプタであり、同じコアロジックを外部から直接利用できる。求人・会社情報の補完は許可済み情報源のみに限定し、クローリングは禁止とする。
 
 ### 目標
-- CLI からプロフィール/求人/評価の各エージェントを一貫した契約で実行できる
+- CLI から Profile Tool / Job Tool / Evaluate Agent を一貫した契約で実行できる
 - 入力欠損時でもドラフトとして保存し、後続評価のための再利用性を確保する
 - ログ・保存・出所情報を一貫して保持し、評価と比較の説明責任を担保する
 
@@ -45,7 +45,7 @@
 - 選定パターン: アダプタ付きレイヤード・ワークフロー（CLI → セッション → ワークフロー → ドメインサービス → 保存）。既存構成に一致し、責務分離が明確。
 - ドメイン境界: プロフィール/求人/評価を独立ドメインとして扱い、共通基盤は会話・ログ・保存に集約。
 - 維持する既存パターン: セッション辞書、LangGraph StateGraph、警告の積み上げ。
-- 追加コンポーネントの理由: 求人/評価サービス、LLM 要約、会社補完アダプタを追加。
+- 追加コンポーネントの理由: プロフィール対話エージェント、求人/評価サービス、LLM 要約、会社補完アダプタを追加。
 - ステアリング整合: 型ヒント必須、TDD、ログ・例外方針を維持。
 
 ```mermaid
@@ -54,19 +54,23 @@ graph TB
     CLIApp --> SessionBuilder[セッション構築]
     SessionBuilder --> ConversationStore[会話保存]
     SessionBuilder --> WorkflowBuilder[ワークフロー構築]
-    WorkflowBuilder --> ProfileWorkflow[プロフィールフロー]
-    WorkflowBuilder --> JobWorkflow[求人フロー]
+    WorkflowBuilder --> ProfileAgentWorkflow[プロフィールエージェントフロー]
+    WorkflowBuilder --> ProfileToolWorkflow[プロフィールツールフロー]
+    WorkflowBuilder --> JobToolWorkflow[求人ツールフロー]
     WorkflowBuilder --> EvaluateWorkflow[評価フロー]
-    ProfileWorkflow --> ProfileService[プロフィールサービス]
-    JobWorkflow --> JobService[求人サービス]
+    ProfileAgentWorkflow --> ProfileAgent[プロフィールエージェント]
+    ProfileToolWorkflow --> ProfileTool[プロフィールツール]
+    JobToolWorkflow --> JobTool[求人ツール]
+    ProfileAgent --> ProfileTool
+    ProfileAgent --> ConversationStore
     EvaluateWorkflow --> EvaluateService[評価サービス]
-    JobService --> CompanyEnrichment[会社補完]
-    ProfileService --> Storage[保存]
-    JobService --> Storage
+    JobTool --> CompanyEnrichment[会社補完]
+    ProfileTool --> Storage[保存]
+    JobTool --> Storage
     EvaluateService --> Storage
     EvaluateService --> LLMService[LLM要約]
-    ProfileService --> Logger[ログ]
-    JobService --> Logger
+    ProfileTool --> Logger[ログ]
+    JobTool --> Logger
     EvaluateService --> Logger
 ```
 
@@ -87,17 +91,23 @@ sequenceDiagram
     participant User
     participant CLI
     participant SessionBuilder
-    participant Workflow
-    participant ProfileService
+    participant ProfileAgentWorkflow
+    participant ProfileAgent
+    participant ProfileToolWorkflow
+    participant ProfileTool
+    participant ConversationStore
     participant Storage
     participant Logger
     User->>CLI: 入力提供
     CLI->>SessionBuilder: 入力正規化
-    SessionBuilder->>Workflow: コンテキスト生成
-    Workflow->>ProfileService: プロフィール生成
-    ProfileService->>Storage: プロフィール保存
-    ProfileService->>Logger: ログ記録
-    Workflow-->>CLI: 結果
+    SessionBuilder->>ProfileAgentWorkflow: コンテキスト生成
+    ProfileAgentWorkflow->>ProfileAgent: 対話フロー開始
+    ProfileAgent->>ProfileTool: プロフィール構造化
+    ProfileAgent->>ProfileToolWorkflow: 構造化/検証フロー
+    ProfileAgent->>ConversationStore: 会話記録
+    ProfileTool->>Storage: プロフィール保存
+    ProfileTool->>Logger: ログ記録
+    ProfileAgentWorkflow-->>CLI: 結果
     CLI-->>User: 出力
 ```
 
@@ -106,18 +116,20 @@ sequenceDiagram
     participant User
     participant CLI
     participant SessionBuilder
-    participant JobService
+    participant JobToolWorkflow
+    participant JobTool
     participant CompanyEnrichment
     participant Storage
     User->>CLI: 求人入力提供
     CLI->>SessionBuilder: 入力正規化
-    SessionBuilder->>JobService: 求人解析
+    SessionBuilder->>JobToolWorkflow: 求人解析
+    JobToolWorkflow->>JobTool: 構造化
     alt 会社情報不足 かつ 補完有効
-        JobService->>CompanyEnrichment: 会社情報補完
-        CompanyEnrichment-->>JobService: 補完結果
+        JobTool->>CompanyEnrichment: 会社情報補完
+        CompanyEnrichment-->>JobTool: 補完結果
     end
-    JobService->>Storage: 求人保存
-    JobService-->>CLI: 結果
+    JobTool->>Storage: 求人保存
+    JobTool-->>CLI: 結果
     CLI-->>User: 出力
 ```
 
@@ -142,12 +154,12 @@ sequenceDiagram
 
 | 要件 | 要約 | コンポーネント | インターフェース | フロー |
 |-------------|---------|------------|------------|-------|
-| 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 | 実行コンテキスト構築 | CLI, SessionBuilder, WorkflowBuilder, ProfileService, JobService, EvaluateService | ExecutionContext, SessionBuilderService | プロフィール/求人/評価 |
+| 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 | 実行コンテキスト構築 | CLI, SessionBuilder, WorkflowBuilder, ProfileAgent, ProfileTool, JobTool, EvaluateService | ExecutionContext, SessionBuilderService | プロフィール/求人/評価 |
 | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6 | 会話ブロック管理 | ConversationStore, Logger | ConversationService | プロフィール/求人/評価 |
-| 3.1, 3.2, 3.3 | ワークフローの最小経路と状態更新 | WorkflowBuilder | WorkflowFactory | プロフィール/求人/評価 |
+| 3.1, 3.2, 3.3 | ワークフローの最小経路と状態更新 | WorkflowBuilder, ProfileAgentWorkflow, ProfileToolWorkflow, JobToolWorkflow, EvaluateWorkflow | WorkflowFactory | プロフィール/求人/評価 |
 | 4.1, 4.2, 4.3, 4.4, 4.5 | 保存・バックアップ・ログ | Storage, Logger | StoragePort | 全体 |
-| 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 5.11, 5.12, 5.13, 5.14, 5.15 | プロフィールライフサイクル | ProfileService, ProfileRepository | ProfileService | プロフィール |
-| 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9 | 求人解析と会社補完 | JobService, CompanyEnrichment | JobService, CompanyLookupPort | 求人 |
+| 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 5.11, 5.12, 5.13, 5.14, 5.15 | プロフィールライフサイクル | ProfileTool, ProfileAgent, ProfileRepository | ProfileTool, ProfileAgent | プロフィール |
+| 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9 | 求人解析と会社補完 | JobTool, CompanyEnrichment | JobTool, CompanyLookupPort | 求人 |
 | 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10, 7.11 | 評価と LLM 要約 | EvaluateService, LLMService | EvaluateService, LLMPort | 評価 |
 
 ## コンポーネントとインターフェース
@@ -158,8 +170,12 @@ sequenceDiagram
 | SessionBuilder | セッション | 入力正規化と実行コンテキスト生成 | 1.1, 1.2, 1.5 | なし | Service, State |
 | ConversationStore | セッション | 会話ブロックの記録 | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6 | Storage (P1) | Service, State |
 | WorkflowBuilder | ワークフロー | LangGraph でワークフロー構築 | 3.1, 3.2, 3.3 | LangGraph (P0) | Service |
-| ProfileService | プロフィール | プロフィール構築と更新 | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 5.11, 5.12, 5.13, 5.14, 5.15 | Storage (P0) | Service |
-| JobService | 求人 | 求人解析と会社情報分離 | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9 | CompanyEnrichment (P1) | Service |
+| ProfileAgentWorkflow | ワークフロー | 対話フローの実行 | 5.6, 5.7, 5.8, 5.9 | LangGraph (P0) | Service |
+| ProfileToolWorkflow | ワークフロー | 構造化/検証フローの実行 | 5.1, 5.2, 5.3, 5.4, 5.5 | LangGraph (P0) | Service |
+| JobToolWorkflow | ワークフロー | 求人解析フローの実行 | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9 | LangGraph (P0) | Service |
+| ProfileTool | プロフィール | プロフィール構築と更新 | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 5.11, 5.12, 5.13, 5.14, 5.15 | Storage (P0) | Tool |
+| ProfileAgent | プロフィール | 欠損補完の対話管理 | 5.6, 5.7, 5.8, 5.9 | ProfileTool (P0), ConversationStore (P0) | Agent |
+| JobTool | 求人 | 求人解析と会社情報分離 | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9 | CompanyEnrichment (P1) | Tool |
 | CompanyEnrichment | 求人 | 許可済み情報源で会社補完 | 6.3, 6.8 | 外部API (P1) | Service |
 | EvaluateService | 評価 | 評価計算と要約管理 | 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10, 7.11 | LLMService (P0), Storage (P0) | Service |
 | LLMService | 評価 | 要約生成の抽象化 | 7.6, 7.7, 7.8, 7.9, 7.10 | LLMプロバイダ (P0) | Service |
@@ -226,7 +242,7 @@ class CliEntrypoint(Protocol):
 class SessionBuilderService(Protocol):
     def build(self, mode: str, inputs: list[str], options: dict[str, object]) -> ExecutionContext: ...
 ```
-- 前提条件: 入力は空でない
+- 前提条件: 必須入力のモードでは空でない
 - 事後条件: 実行コンテキストが生成される
 - 不変条件: 入力の順序は保持される
 
@@ -242,7 +258,7 @@ class SessionBuilderService(Protocol):
 - 時系列順序を保持し追記方式で記録する
 
 **依存関係**
-- 受け取り: SessionBuilder — ブロック生成 (P1)
+- 受け取り: ProfileAgent / SessionBuilder — ブロック生成 (P1)
 - 呼び出し: Storage — 永続化 (P1)
 
 **契約**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [x]
@@ -263,7 +279,7 @@ class ConversationService(Protocol):
 
 | 項目 | 内容 |
 |-------|--------|
-| 目的 | LangGraph を用いてエージェントのワークフローを組み立てる |
+| 目的 | LangGraph を用いてツール/エージェントのワークフローを組み立てる |
 | 要件 | 3.1, 3.2, 3.3 |
 
 **責務と制約**
@@ -275,12 +291,15 @@ class ConversationService(Protocol):
 - 受け取り: SessionBuilder — 実行コンテキスト (P0)
 - 呼び出し: LangGraph — ワークフロー実行 (P0)
 
-**契約**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [ ]
+**契約**: Tool [x] / API [ ] / Event [ ] / Batch [ ] / State [ ]
 
 ##### サービスインターフェース
 ```python
 class WorkflowFactory(Protocol):
-    def build(self, context: ExecutionContext) -> WorkflowHandle: ...
+    def build_profile_tool(self, context: ExecutionContext) -> WorkflowHandle: ...
+    def build_profile_agent(self, context: ExecutionContext) -> WorkflowHandle: ...
+    def build_job_tool(self, context: ExecutionContext) -> WorkflowHandle: ...
+    def build_evaluate(self, context: ExecutionContext) -> WorkflowHandle: ...
 ```
 - 前提条件: 必要な前提情報が揃っている
 - 事後条件: 実行可能なワークフローが返る
@@ -288,7 +307,7 @@ class WorkflowFactory(Protocol):
 
 ### プロフィールドメイン
 
-#### ProfileService
+#### ProfileTool
 
 | 項目 | 内容 |
 |-------|--------|
@@ -297,29 +316,57 @@ class WorkflowFactory(Protocol):
 
 **責務と制約**
 - 入力から構造化プロフィールを生成する
-- 欠損はドラフトとして保持し、必要に応じ質問を生成する
-- 初期入力が空でも対話で情報収集を開始できる
+- 欠損はドラフトとして保持し、欠損リストを返す
+- 初期入力が空でもドラフトと欠損リストを返す
 
 **依存関係**
-- 受け取り: WorkflowBuilder — 実行フロー (P0)
+- 受け取り: ProfileAgent — 構造化要求 (P0)
 - 呼び出し: Storage — 永続化 (P0)
 
 **契約**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [ ]
 
 ##### サービスインターフェース
 ```python
-class ProfileService(Protocol):
+class ProfileTool(Protocol):
     def build(self, context: ExecutionContext) -> ProfileDraft: ...
     def finalize(self, draft: ProfileDraft) -> ProfileResult: ...
     def update(self, base: ProfileResult, context: ExecutionContext) -> ProfileResult: ...
 ```
-- 前提条件: 入力は空ではない
+- 前提条件: 入力は空でもよい
 - 事後条件: ドラフトまたは完了プロフィールが得られる
 - 不変条件: 欠損情報は必ず記録される
 
+#### ProfileAgent
+
+| 項目 | 内容 |
+|-------|--------|
+| 目的 | 欠損補完の対話を管理し、ProfileTool を呼び出して更新する |
+| 要件 | 5.6, 5.7, 5.8, 5.9 |
+
+**責務と制約**
+- ProfileTool が返す欠損リストを基に質問を生成する
+- 回答を ConversationStore に記録し、必要に応じて再構造化する
+- ユーザー終了または試行上限時は未完了として保存する
+
+**依存関係**
+- 受け取り: WorkflowBuilder — 実行フロー (P0)
+- 呼び出し: ProfileTool — 構造化/再構造化 (P0)
+- 呼び出し: ConversationStore — 会話記録 (P0)
+
+**契約**: Agent [x] / Service [ ] / API [ ] / Event [ ] / Batch [ ] / State [ ]
+
+##### サービスインターフェース
+```python
+class ProfileAgent(Protocol):
+    def run(self, context: ExecutionContext) -> ProfileResult: ...
+```
+- 前提条件: 実行コンテキストが生成されている
+- 事後条件: 完了または未完了のプロフィールが返る
+- 不変条件: 会話履歴に質問/回答が記録される
+
 ### 求人ドメイン
 
-#### JobService
+#### JobTool
 
 | 項目 | 内容 |
 |-------|--------|
@@ -339,7 +386,7 @@ class ProfileService(Protocol):
 
 ##### サービスインターフェース
 ```python
-class JobService(Protocol):
+class JobTool(Protocol):
     def parse(self, context: ExecutionContext) -> JobResult: ...
 ```
 - 前提条件: 入力が読取可能である
@@ -358,7 +405,7 @@ class JobService(Protocol):
 - 取得不能時は警告を返し処理は継続する
 
 **依存関係**
-- 受け取り: JobService — 補完要求 (P1)
+- 受け取り: JobTool — 補完要求 (P1)
 - 外部: 許可済みAPI — 会社情報取得 (P1)
 
 **契約**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [ ]
@@ -442,7 +489,7 @@ class LLMPort(Protocol):
 - 保存先が無い場合は作成するか明示的に失敗する
 
 **依存関係**
-- 受け取り: ProfileService, JobService, EvaluateService — 保存要求 (P0)
+- 受け取り: ProfileTool, JobTool, EvaluateService — 保存要求 (P0)
 - 外部: ローカルFS — 永続化 (P0)
 
 **契約**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [x]

@@ -1,12 +1,12 @@
 # Requirements Document
 
 ## Introduction
-キャリアエージェント全体（プロフィール生成・求人解析・適合度評価）を仕様駆動で整備し、CLI から完結するエージェント群として動作させる。コアとなる Profile Agent は LangGraph ワークフローで入力正規化・構造化・検証・保存を行い、Job Agent は求人を構造化、Evaluate Agent は適合度評価を行う。本仕様では LLM を介した評価結果のメタ評価（比較・要約）までを対象とし、人手向けのレポート表示や単純比較 UI は別スペック（Web アプリ）で扱う。
+キャリアエージェント全体（プロフィール生成・求人解析・適合度評価）を仕様駆動で整備し、CLI から完結するツール/エージェント群として動作させる。コアとなる Profile Tool は LangGraph ワークフローで入力正規化・構造化・検証・保存を行い、Job Tool は求人を構造化する。対話補完は Profile Agent が担い、Evaluate Agent は適合度評価と LLM 要約を担当する。本仕様では LLM を介した評価結果のメタ評価（比較・要約）までを対象とし、人手向けのレポート表示や単純比較 UI は別スペック（Web アプリ）で扱う。
 
 ## Requirements
 
-### Requirement 1 (Common): Execution Context per Agent
-**Objective:** 各エージェント実行（Profile/Job/Evaluate）が前提を満たした状態で開始できるよう、モード別の実行コンテキストを用意する。
+### Requirement 1 (Common): Execution Context per Component
+**Objective:** 各実行ユニット（Profile Tool/Job Tool/Evaluate Agent）が前提を満たした状態で開始できるよう、モード別の実行コンテキストを用意する。
 
 #### Acceptance Criteria
 1. When a profile command is run with text inputs, the system shall normalize non-empty strings, preserve their order, and keep them in a profile-mode execution context.  
@@ -65,8 +65,8 @@
 5. If the save destination does not exist, the system shall create it or fail with a clear error.  
    - ※ 保存先が無ければ作成するか明示的にエラーを返す。
 
-### Requirement 5 (Profile Agent): Profile Lifecycle (Build, Complete, Update)
-**Objective:** プロフィールを「構造化する → 必須欠損を洗い出す → 対話で補完する → 必要な領域だけ安全に更新する」一連の流れで扱い、常に整合性のとれたプロフィールを返す。
+### Requirement 5 (Profile Tool): Profile Lifecycle (Build, Complete, Update)
+**Objective:** Profile Tool はプロフィールを「構造化する → 必須欠損を洗い出す → 必要な領域だけ安全に更新する」一連の流れで扱い、常に整合性のとれたプロフィールを返す。対話補完は Profile Agent が担い、Tool は質問対象の欠損リストを提供する。
 
 #### Acceptance Criteria
 1. When raw profile information is provided, the system shall construct a structured profile covering metadata, summary, career, and plan.  
@@ -79,8 +79,8 @@
    - ※ 欠損がなければ「完了」として保存し、返す。
 5. If primitive value conversion fails, the system shall treat the result as empty rather than throwing an exception.  
    - ※ 数値/文字列などの型変換に失敗しても例外にせず「空」として扱う。
-6. If required profile items are missing, the system shall prepare follow-up questions for those gaps before finalizing.  
-   - ※ 欠損がある場合は、確定前に不足項目を埋めるための質問を用意する。
+6. If required profile items are missing, the system shall prepare follow-up questions for those gaps to be used by the Profile Agent before finalizing.  
+   - ※ 欠損がある場合は、確定前に Profile Agent が使う不足項目の質問を用意する。
 7. When answers are received, the system shall record them in the conversation history and re-evaluate missing items.  
    - ※ 回答を会話履歴に記録し、欠損リストを再計算する。
 8. If the user ends the interview or attempts are exhausted, the system shall stop questioning and save the profile as incomplete with remaining gaps recorded.  
@@ -100,8 +100,8 @@
 15. When no existing profile is present and a new profile is requested, the system shall build a profile from user inputs alone, apply the same missing-field handling, and save to the default profile destination.  
     - ※ 既存プロフィールが無い状態で新規作成する場合、ユーザー入力だけで組み立て、欠損処理は同じルールで行い、既定の保存先に保存する。
 
-### Requirement 6 (Job Agent): Job and Company Parsing
-**Objective:** 求人入力を後続評価で使える構造化データに変換し、入力に含まれる会社情報を分離保持しつつ、必要に応じて許可された情報源から会社情報を補完する。求人検索はポリシーに反しない範囲でオプションとする。
+### Requirement 6 (Job Tool): Job and Company Parsing
+**Objective:** Job Tool は求人入力を後続評価で使える構造化データに変換し、入力に含まれる会社情報を分離保持しつつ、必要に応じて許可された情報源から会社情報を補完する。求人検索はポリシーに反しない範囲でオプションとする。
 
 #### Acceptance Criteria
 1. When a job parsing request is issued with one or more job inputs, the system shall read each input and produce structured job data.  
