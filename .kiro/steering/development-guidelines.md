@@ -9,9 +9,10 @@
 - 各テストに目的と前提を docstring で明示。
 
 ## Coding Standards
-- Python 3.13 / uv 管理。全シンボルに型ヒント必須、公開 API は mypy `--strict` を目標。
+- Python 3.14 / uv 管理。全シンボルに型ヒント必須、公開 API は mypy `--strict` を目標。
 - PEP8 の主要ルールを尊重しつつレビューで例外判断。アウトパラメータ的な副作用は禁止（複数戻りはタプル/結果オブジェクト）。
 - 公開/複雑処理には簡潔な docstring を付ける。必要に応じプライベートにも目的を補足。
+- コードコメントとテストの docstring は日本語で記述する（エラーメッセージは英語でも可）。
 
 ## Quality Tools
 - `ruff check` で E/W/F/I を検出。`ruff --fix`/`ruff format` はデフォルト不使用（手動修正）。
