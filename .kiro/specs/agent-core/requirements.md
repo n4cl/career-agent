@@ -11,12 +11,16 @@
 #### Acceptance Criteria
 1. When a profile command is run with text inputs, the system shall normalize non-empty strings, preserve their order, and keep them in a profile-mode execution context.  
    - ※ profile 実行時は入力を正規化し順序を保ってプロファイル用コンテキストに保持する。
-2. When a job-parse command is run with file inputs, the system shall verify readability, preserve order, and keep them in a job-mode context.  
+2. If a profile command is run with no user-provided inputs, the system shall start the interview flow with an empty input set instead of raising a precondition error.  
+   - ※ profile 実行で入力が無くても、空入力のままヒアリングを開始する。
+3. When a job-parse command is run with file inputs, the system shall verify readability, preserve order, and keep them in a job-mode context.  
    - ※ job parse ではファイルの存在/読込可否を確認し、順序を保ってジョブ用コンテキストに保持する。
-3. When an evaluate command is run with profile and job inputs, the system shall require both, keep them in an evaluate-mode context, and raise an error if either is missing.  
+4. When an evaluate command is run with profile and job inputs, the system shall require both, keep them in an evaluate-mode context, and raise an error if either is missing.  
    - ※ evaluate では両入力が必須で、欠けていれば開始前にエラーとする。
-4. Where optional flags are provided (e.g., overwrite permission, update targets, interactive mode), the system shall map them into the current context and apply sensible defaults for omitted options.  
+5. Where optional flags are provided (e.g., overwrite permission, update targets), the system shall map them into the current context and apply sensible defaults for omitted options.  
    - ※ オプションはコンテキストに反映し、未指定は妥当なデフォルトで補う。
+6. The system shall expose core agent logic through a callable interface independent of the CLI, and the CLI shall invoke that interface.  
+   - ※ コアロジックは CLI 非依存の呼び出し口として提供し、CLI はそれを呼び出す。
 
 ### Requirement 2 (Common): Conversation Block Management
 **Objective:** ユーザー入力とエージェント応答を、役割と出所が明示された順序付きの会話ブロックとして一元管理し、追跡性と再利用性を高める。
@@ -24,14 +28,14 @@
 #### Acceptance Criteria
 1. The system shall manage exactly two block roles: user input and agent output.  
    - ※ ブロックの役割は「ユーザー入力」と「エージェント応答」の2種類に限定する。
-2. All user-origin inputs (initial text, files, interactive answers) shall be recorded as user blocks; any additional metadata is optional.  
+2. All user-origin inputs (initial text, files, interview answers) shall be recorded as user blocks; any additional metadata is optional.  
    - ※ ユーザー起点の入力はユーザーブロックとして一元管理し、付加情報は必要に応じて任意で付与する。
 3. Agent responses (warnings, summaries, prompts, etc.) shall be recorded as agent blocks with relevant metadata.  
    - ※ エージェントの応答は必要なメタを付けたエージェントブロックとして記録する。
 4. The system shall preserve chronological order across all blocks (user and agent).  
    - ※ ユーザー/エージェント双方のブロックは時系列順を維持する。
-5. If required user inputs are absent, the system shall raise an explicit precondition error.  
-   - ※ ユーザー入力が無い場合は前提不足エラーとする。
+5. If required user inputs are absent for modes that demand them (e.g., job parsing, evaluation), the system shall raise an explicit precondition error.  
+   - ※ 入力が必須のモード（求人解析・評価など）では、入力欠如時に前提不足エラーとする。
 6. Introducing additional block roles shall require a requirements update.  
    - ※ 新たなブロック役割を導入する場合は要件更新を要する。
 
@@ -62,7 +66,7 @@
    - ※ 保存先が無ければ作成するか明示的にエラーを返す。
 
 ### Requirement 5 (Profile Agent): Profile Lifecycle (Build, Complete, Update)
-**Objective:** プロフィールを「構造化する → 必須欠損を洗い出す → 対話で補完する（任意） → 必要な領域だけ安全に更新する」一連の流れで扱い、常に整合性のとれたプロフィールを返す。
+**Objective:** プロフィールを「構造化する → 必須欠損を洗い出す → 対話で補完する → 必要な領域だけ安全に更新する」一連の流れで扱い、常に整合性のとれたプロフィールを返す。
 
 #### Acceptance Criteria
 1. When raw profile information is provided, the system shall construct a structured profile covering metadata, summary, career, and plan.  
@@ -75,14 +79,14 @@
    - ※ 欠損がなければ「完了」として保存し、返す。
 5. If primitive value conversion fails, the system shall treat the result as empty rather than throwing an exception.  
    - ※ 数値/文字列などの型変換に失敗しても例外にせず「空」として扱う。
-6. If required profile items are missing and interactive mode is enabled, the system shall prepare follow-up questions for those gaps before finalizing.  
-   - ※ 欠損があり対話モードなら、確定前に不足項目を埋めるための質問を用意する。
+6. If required profile items are missing, the system shall prepare follow-up questions for those gaps before finalizing.  
+   - ※ 欠損がある場合は、確定前に不足項目を埋めるための質問を用意する。
 7. When answers are received, the system shall record them in the conversation history and re-evaluate missing items.  
    - ※ 回答を会話履歴に記録し、欠損リストを再計算する。
 8. If the user ends the interview or attempts are exhausted, the system shall stop questioning and save the profile as incomplete with remaining gaps recorded.  
    - ※ ユーザーが終了する/試行上限に達したら質問を止め、残欠損を記録した未完了状態で保存する。
-9. Where interactive mode is disabled, the system shall skip question generation; if required items remain missing at finalize time, it shall save an incomplete draft (with missing list) and report incompleteness instead of producing a completed profile.  
-   - ※ 非対話モードでは質問を出さず進め、確定時に必須欠損が残っていれば欠損リスト付きの未完了ドラフトとして保存し、不完了であることを報告する（完成版は返さない）。
+9. If no initial inputs are provided, the system shall initiate the interview to gather profile information and proceed with the same missing-field handling rules.  
+   - ※ 初期入力が空の場合でもヒアリングを開始し、欠損処理は同じルールで行う。
 10. When running in update mode, the system shall load the existing profile before applying changes.  
     - ※ 更新モードでは必ず既存プロフィールを読み込んでから変更を始める。
 11. Where update targets are specified, the system shall limit regeneration and merging to those areas, leaving others unchanged.  
