@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from pathlib import Path
+from typing import Any, Literal, Mapping
+
+from .artifact_writer import save_json_artifact
 
 from .context import ExecutionContext
 
@@ -19,6 +22,14 @@ class ProfileDraft:
     age_band: str
     prefecture: str
     certifications: list[str]
+
+
+@dataclass(frozen=True)
+class ProfileResult(ProfileDraft):
+    """確定済みプロフィール結果."""
+
+    status: Literal["incomplete", "complete"]
+    missing: list[str]
 
 
 def _coerce_str(value: object) -> str:
@@ -70,6 +81,19 @@ def _build_draft_from_payload(payload: Mapping[str, Any]) -> ProfileDraft:
 class ProfileToolImpl:
     """プロフィール構造化の実装."""
 
+    def __init__(
+        self,
+        *,
+        output_path: Path | None = None,
+        allow_overwrite: bool = True,
+        create_dirs: bool = True,
+        make_backup: bool = True,
+    ) -> None:
+        self._output_path = output_path or Path("profiles/profile.json")
+        self._allow_overwrite = allow_overwrite
+        self._create_dirs = create_dirs
+        self._make_backup = make_backup
+
     def build(self, context: ExecutionContext) -> ProfileDraft:
         """プロフィールドラフトを構築する。"""
         if context.mode != "profile":
@@ -89,3 +113,55 @@ class ProfileToolImpl:
             prefecture="",
             certifications=[],
         )
+
+    def finalize(self, draft: ProfileDraft) -> ProfileResult:
+        """ドラフトを保存して完了判定を返す。"""
+        missing = _detect_missing(draft)
+        status: Literal["incomplete", "complete"] = (
+            "complete" if not missing else "incomplete"
+        )
+        result = ProfileResult(
+            metadata=draft.metadata,
+            summary=draft.summary,
+            career=list(draft.career),
+            plan=list(draft.plan),
+            age_band=draft.age_band,
+            prefecture=draft.prefecture,
+            certifications=list(draft.certifications),
+            status=status,
+            missing=missing,
+        )
+        payload = _to_payload(result)
+        save_json_artifact(
+            payload=payload,
+            path=self._output_path,
+            allow_overwrite=self._allow_overwrite,
+            create_dirs=self._create_dirs,
+            make_backup=self._make_backup,
+        )
+        return result
+
+
+def _detect_missing(draft: ProfileDraft) -> list[str]:
+    """欠損項目を検出する。"""
+    missing: list[str] = []
+    if not draft.summary.strip():
+        missing.append("summary")
+    if not any(item.strip() for item in draft.career):
+        missing.append("career")
+    return missing
+
+
+def _to_payload(result: ProfileResult) -> dict[str, Any]:
+    """保存用の辞書を生成する。"""
+    return {
+        "metadata": result.metadata,
+        "summary": result.summary,
+        "career": list(result.career),
+        "plan": list(result.plan),
+        "age_band": result.age_band,
+        "prefecture": result.prefecture,
+        "certifications": list(result.certifications),
+        "status": result.status,
+        "missing": list(result.missing),
+    }

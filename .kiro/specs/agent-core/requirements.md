@@ -103,6 +103,8 @@
     - ※ 年齢や住所情報がある場合、年齢は年齢帯、住所は都道府県レベルに丸めて保持する。
 17. When certifications are provided, the system shall store them as a list of strings in the profile.  
     - ※ 資格情報がある場合、文字列リストとしてプロフィールに保持する。
+18. The system shall consider a profile complete when summary and at least one career entry are present.  
+    - ※ 要約と経歴が揃っている場合を完了とし、それ以外は欠損として扱う。
 
 ### Requirement 6 (Job Tool): Job and Company Parsing
 **Objective:** Job Tool は求人入力を後続評価で使える構造化データに変換し、入力に含まれる会社情報を分離保持しつつ、必要に応じて許可された情報源から会社情報を補完する。求人検索はポリシーに反しない範囲でオプションとする。
