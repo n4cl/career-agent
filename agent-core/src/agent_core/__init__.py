@@ -8,4 +8,5 @@ __all__ = [
     "conversation",
     "context",
     "preconditions",
+    "storage",
 ]
