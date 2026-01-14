@@ -10,4 +10,5 @@ __all__ = [
     "preconditions",
     "storage",
     "log_writer",
+    "artifact_writer",
 ]
