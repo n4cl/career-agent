@@ -27,6 +27,33 @@ class WorkflowState:
 Node = Callable[[WorkflowState], WorkflowState]
 
 
+def _snapshot_state(state: WorkflowState) -> dict[str, object]:
+    """比較のために状態をスナップショットする。"""
+    return {
+        "context": state.context,
+        "warnings": list(state.warnings),
+    }
+
+
+def guard_node(node: Node, *, allowed_fields: set[str]) -> Node:
+    """許可されたフィールド以外の変更を検出して拒否する。"""
+
+    def _run(state: WorkflowState) -> WorkflowState:
+        before = _snapshot_state(state)
+        result = node(state)
+        if not isinstance(result, WorkflowState):
+            raise ValueError("workflow node must return WorkflowState")
+        after = _snapshot_state(result)
+        for field_name, before_value in before.items():
+            if field_name in allowed_fields:
+                continue
+            if after[field_name] != before_value:
+                raise ValueError(f"unauthorized state mutation: {field_name}")
+        return result
+
+    return _run
+
+
 def _default_node(name: str) -> Node:
     """未実装ノードは警告を残して状態を返す。"""
 
@@ -67,8 +94,11 @@ def build_default_workflow(
     """入力収集→検証の最小経路を持つワークフローを構築する。"""
     graph = StateGraph(WorkflowState)
 
-    graph.add_node("collect_input", collect_node or _default_node("collect_input"))
-    graph.add_node("validate", validate_node or _default_node("validate"))
+    collect = collect_node or _default_node("collect_input")
+    validate = validate_node or _default_node("validate")
+
+    graph.add_node("collect_input", guard_node(collect, allowed_fields={"warnings"}))
+    graph.add_node("validate", guard_node(validate, allowed_fields={"warnings"}))
 
     graph.set_entry_point("collect_input")
     graph.add_edge("collect_input", "validate")
