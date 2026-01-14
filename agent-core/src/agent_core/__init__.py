@@ -9,4 +9,5 @@ __all__ = [
     "context",
     "preconditions",
     "storage",
+    "log_writer",
 ]
