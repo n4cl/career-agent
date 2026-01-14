@@ -7,7 +7,7 @@
 
 ## Core Technologies
 
-- **Language**: Python 3.13
+- **Language**: Python 3.14
 - **CLI Framework**: Typer（サブコマンド構成、option callback で version 表示）
 - **Workflow**: LangGraph (StateGraph)
 
@@ -30,7 +30,7 @@
 ## Development Environment
 
 ### Required Tools
-- Python 3.13
+- Python 3.14
 - uv（依存管理）
 
 ### Common Commands
