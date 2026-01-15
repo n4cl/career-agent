@@ -8,6 +8,7 @@ from typing import Any
 from .context import ExecutionContext
 from .conversation import ConversationStore
 from .profile_tool import ProfileDraft, ProfileResult, ProfileToolImpl, detect_missing
+from .prompts import profile_question
 
 
 @dataclass(frozen=True)
@@ -20,13 +21,8 @@ class InterviewQuestion:
 
 def _build_questions(missing: list[str]) -> list[InterviewQuestion]:
     """欠損項目から質問を生成する。"""
-    # TODO: プロンプトの表現は後で調整しやすい形に移す
-    prompts = {
-        "summary": "summary を教えてください。",
-        "career": "career を教えてください。",
-    }
     return [
-        InterviewQuestion(field=item, prompt=prompts.get(item, f"{item} を教えてください。"))
+        InterviewQuestion(field=item, prompt=profile_question(item))
         for item in missing
     ]
 

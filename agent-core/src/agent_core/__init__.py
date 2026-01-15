@@ -13,4 +13,5 @@ __all__ = [
     "artifact_writer",
     "profile_tool",
     "profile_agent",
+    "prompts",
 ]
