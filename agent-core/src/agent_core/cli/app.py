@@ -57,6 +57,18 @@ def _prompt_answers(questions: list[InterviewQuestion]) -> tuple[dict[str, Any],
     return answers, False
 
 
+def _format_missing(missing: list[str]) -> str:
+    if not missing:
+        return "なし"
+    return ", ".join(missing)
+
+
+def _print_summary(*, status: str, missing: list[str], output: Path) -> None:
+    typer.echo(f"状態: {status}")
+    typer.echo(f"欠損: {_format_missing(missing)}")
+    typer.echo(f"保存先: {output}")
+
+
 def _build_context(
     *,
     text_inputs: list[str] | None,
@@ -90,7 +102,9 @@ def profile_interview(
 
     if non_interactive:
         context = _build_context(text_inputs=text_inputs, payload=state.payload)
-        agent.run_step(context, answers=None, stop=True, attempt=state.attempt)
+        step = agent.run_step(context, answers=None, stop=True, attempt=state.attempt)
+        assert step.result is not None
+        _print_summary(status=step.result.status, missing=step.result.missing, output=output)
         return
 
     answers: dict[str, Any] | None = None
@@ -103,17 +117,29 @@ def profile_interview(
             attempt=state.attempt,
         )
         if step.status == "complete":
+            assert step.result is not None
+            _print_summary(
+                status=step.result.status,
+                missing=step.result.missing,
+                output=output,
+            )
             return
 
         answers, stop = _prompt_answers(step.questions)
         _merge_payload(state.payload, answers)
         if stop:
             context = _build_context(text_inputs=text_inputs, payload=state.payload)
-            agent.run_step(
+            final_step = agent.run_step(
                 context,
                 answers=answers or None,
                 stop=True,
                 attempt=state.attempt,
+            )
+            assert final_step.result is not None
+            _print_summary(
+                status=final_step.result.status,
+                missing=final_step.result.missing,
+                output=output,
             )
             return
 

@@ -27,6 +27,9 @@ def test_profile_interview_non_interactive_saves_incomplete(tmp_path: Path) -> N
     )
 
     assert result.exit_code == 0
+    assert "状態: incomplete" in result.output
+    assert "欠損: career" in result.output
+    assert f"保存先: {output_path}" in result.output
     saved = json.loads(output_path.read_text(encoding="utf-8"))
     assert saved["status"] == "incomplete"
     assert saved["missing"] == ["career"]
@@ -51,6 +54,9 @@ def test_profile_interview_interactive_completes(tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0
+    assert "状態: complete" in result.output
+    assert "欠損: なし" in result.output
+    assert f"保存先: {output_path}" in result.output
     saved = json.loads(output_path.read_text(encoding="utf-8"))
     assert saved["status"] == "complete"
     assert saved["career"] == ["backend"]
