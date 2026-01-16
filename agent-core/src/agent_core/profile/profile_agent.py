@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from ..shared.context import ExecutionContext
 from ..shared.conversation import ConversationStore
@@ -66,6 +66,41 @@ class ProfileAgentImpl:
         self._store = store
         self._max_attempts = max_attempts
 
+    def run_step(
+        self,
+        context: ExecutionContext,
+        *,
+        answers: dict[str, Any] | None,
+        stop: bool,
+        attempt: int,
+    ) -> "ProfileInterviewResult":
+        """対話フローの1ステップを実行して結果を返す。"""
+        draft = self._tool.build(context)
+
+        if answers:
+            self._record_answers(answers)
+            draft = _apply_answers(draft, answers)
+        missing = detect_missing(draft)
+
+        should_finalize = stop or attempt >= self._max_attempts or not missing
+        if should_finalize:
+            result = self._tool.finalize(draft)
+            return ProfileInterviewResult(
+                status="complete",
+                questions=[],
+                result=result,
+                missing=list(result.missing),
+            )
+
+        questions = _build_questions(missing)
+        self._record_questions(questions)
+        return ProfileInterviewResult(
+            status="in_progress",
+            questions=questions,
+            result=None,
+            missing=missing,
+        )
+
     def run(
         self,
         context: ExecutionContext,
@@ -74,21 +109,15 @@ class ProfileAgentImpl:
         stop: bool,
         attempt: int,
     ) -> ProfileResult:
-        """対話フローを実行してプロフィール結果を返す。"""
-        draft = self._tool.build(context)
-        missing = detect_missing(draft)
-        questions = _build_questions(missing)
-        self._record_questions(questions)
-
-        if answers:
-            self._record_answers(answers)
-            draft = _apply_answers(draft, answers)
-            missing = detect_missing(draft)
-
-        should_finalize = stop or attempt >= self._max_attempts or not missing
-        if should_finalize:
-            return self._tool.finalize(draft)
-        return self._tool.finalize(draft)
+        """後方互換のため対話を完了させる。"""
+        result = self.run_step(
+            context,
+            answers=answers,
+            stop=True,
+            attempt=attempt,
+        )
+        assert result.result is not None
+        return result.result
 
     def _record_questions(self, questions: list[InterviewQuestion]) -> None:
         """質問を会話履歴に記録する。"""
@@ -107,3 +136,13 @@ class ProfileAgentImpl:
                 content=str(answer),
                 metadata={"field": field},
             )
+
+
+@dataclass(frozen=True)
+class ProfileInterviewResult:
+    """対話ステップの実行結果."""
+
+    status: Literal["in_progress", "complete"]
+    questions: list[InterviewQuestion]
+    result: ProfileResult | None
+    missing: list[str]
