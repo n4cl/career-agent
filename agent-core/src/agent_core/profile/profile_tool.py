@@ -117,25 +117,9 @@ class ProfileToolImpl:
 
     def finalize(self, draft: ProfileDraft) -> ProfileResult:
         """ドラフトを保存して完了判定を返す。"""
-        missing = detect_missing(draft)
-        status: Literal["incomplete", "complete"] = (
-            "complete" if not missing else "incomplete"
-        )
-        result = ProfileResult(
-            metadata=draft.metadata,
-            summary=draft.summary,
-            career=list(draft.career),
-            plan=list(draft.plan),
-            age_band=draft.age_band,
-            prefecture=draft.prefecture,
-            certifications=list(draft.certifications),
-            status=status,
-            missing=missing,
-            warnings=[],
-        )
-        payload = _to_payload(result)
-        save_json_artifact(
-            payload=payload,
+        result = _build_result(draft, warnings=[])
+        _save_result(
+            result,
             path=self._output_path,
             allow_overwrite=self._allow_overwrite,
             create_dirs=self._create_dirs,
@@ -153,30 +137,14 @@ class ProfileToolImpl:
 
         payload = json.loads(self._output_path.read_text(encoding="utf-8"))
         base = _from_payload(payload)
-        update_targets = context.options.get("update_targets") or []
-        if not isinstance(update_targets, list):
-            update_targets = []
-
-        updates = context.options.get("profile_payload") or {}
-        if not isinstance(updates, Mapping):
-            updates = {}
-
-        updated, warnings = _merge_profile(base, updates, update_targets)
-        result = ProfileResult(
-            metadata=updated.metadata,
-            summary=updated.summary,
-            career=list(updated.career),
-            plan=list(updated.plan),
-            age_band=updated.age_band,
-            prefecture=updated.prefecture,
-            certifications=list(updated.certifications),
-            status=updated.status,
-            missing=list(updated.missing),
-            warnings=warnings,
+        update_targets = _normalize_update_targets(
+            context.options.get("update_targets"),
         )
-        payload = _to_payload(result)
-        save_json_artifact(
-            payload=payload,
+        updates = _normalize_updates(context.options.get("profile_payload"))
+
+        result = _merge_profile(base, updates, update_targets)
+        _save_result(
+            result,
             path=self._output_path,
             allow_overwrite=True,
             create_dirs=self._create_dirs,
@@ -239,23 +207,10 @@ def _merge_profile(
     base: ProfileResult,
     updates: Mapping[str, Any],
     update_targets: list[str],
-) -> tuple[ProfileResult, list[str]]:
+) -> ProfileResult:
     """指定範囲だけ更新したプロフィールを返す。"""
-    warnings: list[str] = []
-    allowed = {
-        "metadata",
-        "summary",
-        "career",
-        "plan",
-        "age_band",
-        "prefecture",
-        "certifications",
-    }
-    targets = [_coerce_str(item) for item in update_targets]
-    normalized_targets = [item for item in targets if item]
-    for item in normalized_targets:
-        if item not in allowed:
-            warnings.append(item)
+    normalized_targets = _normalize_target_fields(update_targets)
+    warnings = _collect_unknown_targets(normalized_targets)
 
     def should_update(field: str) -> bool:
         return field in normalized_targets
@@ -301,18 +256,91 @@ def _merge_profile(
     status: Literal["incomplete", "complete"] = (
         "complete" if not missing else "incomplete"
     )
-    return (
-        ProfileResult(
-            metadata=metadata,
-            summary=summary,
-            career=list(career),
-            plan=list(plan),
-            age_band=age_band,
-            prefecture=prefecture,
-            certifications=list(certifications),
-            status=status,
-            missing=missing,
-            warnings=warnings,
-        ),
-        warnings,
+    return ProfileResult(
+        metadata=metadata,
+        summary=summary,
+        career=list(career),
+        plan=list(plan),
+        age_band=age_band,
+        prefecture=prefecture,
+        certifications=list(certifications),
+        status=status,
+        missing=missing,
+        warnings=warnings,
+    )
+
+
+def _normalize_update_targets(value: object) -> list[str]:
+    """更新対象の指定を正規化する。"""
+    if not isinstance(value, list):
+        return []
+    return [_coerce_str(item) for item in value]
+
+
+def _normalize_target_fields(targets: list[str]) -> list[str]:
+    """更新対象の空値を除外する。"""
+    return [item for item in targets if item]
+
+
+def _collect_unknown_targets(targets: list[str]) -> list[str]:
+    """未知の更新対象を警告として返す。"""
+    warnings: list[str] = []
+    allowed = {
+        "metadata",
+        "summary",
+        "career",
+        "plan",
+        "age_band",
+        "prefecture",
+        "certifications",
+    }
+    for item in targets:
+        if item not in allowed:
+            warnings.append(item)
+    return warnings
+
+
+def _normalize_updates(value: object) -> Mapping[str, Any]:
+    """更新ペイロードを辞書に正規化する。"""
+    if not isinstance(value, Mapping):
+        return {}
+    return value
+
+
+def _build_result(draft: ProfileDraft, *, warnings: list[str]) -> ProfileResult:
+    """ドラフトからプロフィール結果を構築する。"""
+    missing = detect_missing(draft)
+    status: Literal["incomplete", "complete"] = (
+        "complete" if not missing else "incomplete"
+    )
+    return ProfileResult(
+        metadata=draft.metadata,
+        summary=draft.summary,
+        career=list(draft.career),
+        plan=list(draft.plan),
+        age_band=draft.age_band,
+        prefecture=draft.prefecture,
+        certifications=list(draft.certifications),
+        status=status,
+        missing=missing,
+        warnings=warnings,
+    )
+
+
+def _save_result(
+    result: ProfileResult,
+    *,
+    path: Path,
+    allow_overwrite: bool,
+    create_dirs: bool,
+    make_backup: bool,
+) -> None:
+    """プロフィール結果を保存する。"""
+    payload = _to_payload(result)
+    save_json_artifact(
+        payload=payload,
+        path=path,
+        allow_overwrite=allow_overwrite,
+        create_dirs=create_dirs,
+        make_backup=make_backup,
     )

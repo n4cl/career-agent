@@ -9,7 +9,11 @@ import uuid
 
 import typer
 
-from agent_core.profile.profile_agent import InterviewQuestion, ProfileAgentImpl
+from agent_core.profile.profile_agent import (
+    InterviewQuestion,
+    ProfileAgentImpl,
+    ProfileInterviewResult,
+)
 from agent_core.profile.profile_tool import ProfileToolImpl
 from agent_core.shared.context import ExecutionContext, build_execution_context
 from agent_core.shared.conversation import ConversationStore, build_log_record
@@ -36,6 +40,11 @@ def _seed_payload(text_inputs: list[str] | None) -> dict[str, Any]:
         if summary:
             payload["summary"] = summary
     return payload
+
+
+def _build_state(text_inputs: list[str] | None) -> _InterviewState:
+    payload = _seed_payload(text_inputs)
+    return _InterviewState(payload=payload, attempt=1, run_id=uuid.uuid4().hex)
 
 
 def _merge_payload(payload: dict[str, Any], answers: dict[str, Any]) -> None:
@@ -98,40 +107,52 @@ def _write_conversation_log(
     writer.write(record)
 
 
-@profile_app.command("interview")
-def profile_interview(
-    text_inputs: list[str] | None = typer.Argument(None),
-    output: Path = typer.Option(
-        Path("profiles/profile.json"),
-        "--output",
-    ),
-    log_path: Path = typer.Option(
-        Path("logs/profile_interview.jsonl"),
-        "--log-path",
-    ),
-    max_attempts: int = typer.Option(3, "--max-attempts"),
-    non_interactive: bool = typer.Option(False, "--non-interactive"),
+def _finalize_interview(
+    *,
+    step: ProfileInterviewResult,
+    output: Path,
+    store: ConversationStore,
+    run_id: str,
+    log_path: Path,
 ) -> None:
-    """プロフィールの対話補完を実行する。"""
-    payload = _seed_payload(text_inputs)
-    state = _InterviewState(payload=payload, attempt=1, run_id=uuid.uuid4().hex)
+    assert step.result is not None
+    _print_summary(status=step.result.status, missing=step.result.missing, output=output)
+    _write_conversation_log(store=store, run_id=run_id, log_path=log_path)
 
-    store = ConversationStore()
-    tool = ProfileToolImpl(output_path=output)
-    agent = ProfileAgentImpl(tool=tool, store=store, max_attempts=max_attempts)
 
-    if non_interactive:
-        context = _build_context(
-            text_inputs=text_inputs,
-            payload=state.payload,
-            run_id=state.run_id,
-        )
-        step = agent.run_step(context, answers=None, stop=True, attempt=state.attempt)
-        assert step.result is not None
-        _print_summary(status=step.result.status, missing=step.result.missing, output=output)
-        _write_conversation_log(store=store, run_id=state.run_id, log_path=log_path)
-        return
+def _run_non_interactive(
+    *,
+    agent: ProfileAgentImpl,
+    store: ConversationStore,
+    state: _InterviewState,
+    text_inputs: list[str] | None,
+    output: Path,
+    log_path: Path,
+) -> None:
+    context = _build_context(
+        text_inputs=text_inputs,
+        payload=state.payload,
+        run_id=state.run_id,
+    )
+    step = agent.run_step(context, answers=None, stop=True, attempt=state.attempt)
+    _finalize_interview(
+        step=step,
+        output=output,
+        store=store,
+        run_id=state.run_id,
+        log_path=log_path,
+    )
 
+
+def _run_interactive(
+    *,
+    agent: ProfileAgentImpl,
+    store: ConversationStore,
+    state: _InterviewState,
+    text_inputs: list[str] | None,
+    output: Path,
+    log_path: Path,
+) -> None:
     answers: dict[str, Any] | None = None
     while True:
         context = _build_context(
@@ -146,13 +167,13 @@ def profile_interview(
             attempt=state.attempt,
         )
         if step.status == "complete":
-            assert step.result is not None
-            _print_summary(
-                status=step.result.status,
-                missing=step.result.missing,
+            _finalize_interview(
+                step=step,
                 output=output,
+                store=store,
+                run_id=state.run_id,
+                log_path=log_path,
             )
-            _write_conversation_log(store=store, run_id=state.run_id, log_path=log_path)
             return
 
         answers, stop = _prompt_answers(step.questions)
@@ -169,13 +190,54 @@ def profile_interview(
                 stop=True,
                 attempt=state.attempt,
             )
-            assert final_step.result is not None
-            _print_summary(
-                status=final_step.result.status,
-                missing=final_step.result.missing,
+            _finalize_interview(
+                step=final_step,
                 output=output,
+                store=store,
+                run_id=state.run_id,
+                log_path=log_path,
             )
-            _write_conversation_log(store=store, run_id=state.run_id, log_path=log_path)
             return
 
         state.attempt += 1
+
+
+@profile_app.command("interview")
+def profile_interview(
+    text_inputs: list[str] | None = typer.Argument(None),
+    output: Path = typer.Option(
+        Path("profiles/profile.json"),
+        "--output",
+    ),
+    log_path: Path = typer.Option(
+        Path("logs/profile_interview.jsonl"),
+        "--log-path",
+    ),
+    max_attempts: int = typer.Option(3, "--max-attempts"),
+    non_interactive: bool = typer.Option(False, "--non-interactive"),
+) -> None:
+    """プロフィールの対話補完を実行する。"""
+    state = _build_state(text_inputs)
+
+    store = ConversationStore()
+    tool = ProfileToolImpl(output_path=output)
+    agent = ProfileAgentImpl(tool=tool, store=store, max_attempts=max_attempts)
+
+    if non_interactive:
+        _run_non_interactive(
+            agent=agent,
+            store=store,
+            state=state,
+            text_inputs=text_inputs,
+            output=output,
+            log_path=log_path,
+        )
+        return
+    _run_interactive(
+        agent=agent,
+        store=store,
+        state=state,
+        text_inputs=text_inputs,
+        output=output,
+        log_path=log_path,
+    )

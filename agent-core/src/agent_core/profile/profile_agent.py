@@ -82,24 +82,10 @@ class ProfileAgentImpl:
             draft = _apply_answers(draft, answers)
         missing = detect_missing(draft)
 
-        should_finalize = stop or attempt >= self._max_attempts or not missing
-        if should_finalize:
-            result = self._tool.finalize(draft)
-            return ProfileInterviewResult(
-                status="complete",
-                questions=[],
-                result=result,
-                missing=list(result.missing),
-            )
+        if self._should_finalize(stop=stop, attempt=attempt, missing=missing):
+            return self._build_final_result(draft)
 
-        questions = _build_questions(missing)
-        self._record_questions(questions)
-        return ProfileInterviewResult(
-            status="in_progress",
-            questions=questions,
-            result=None,
-            missing=missing,
-        )
+        return self._build_in_progress_result(missing)
 
     def run(
         self,
@@ -136,6 +122,37 @@ class ProfileAgentImpl:
                 content=str(answer),
                 metadata={"field": field},
             )
+
+    def _should_finalize(
+        self,
+        *,
+        stop: bool,
+        attempt: int,
+        missing: list[str],
+    ) -> bool:
+        return stop or attempt >= self._max_attempts or not missing
+
+    def _build_final_result(self, draft: ProfileDraft) -> "ProfileInterviewResult":
+        result = self._tool.finalize(draft)
+        return ProfileInterviewResult(
+            status="complete",
+            questions=[],
+            result=result,
+            missing=list(result.missing),
+        )
+
+    def _build_in_progress_result(
+        self,
+        missing: list[str],
+    ) -> "ProfileInterviewResult":
+        questions = _build_questions(missing)
+        self._record_questions(questions)
+        return ProfileInterviewResult(
+            status="in_progress",
+            questions=questions,
+            result=None,
+            missing=missing,
+        )
 
 
 @dataclass(frozen=True)
