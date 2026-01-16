@@ -25,6 +25,7 @@ def test_profile_tool_builds_structured_profile_from_payload() -> None:
                 "certifications": ["AWS SAA"],
             }
         },
+        run_id="run-1",
     )
 
     tool = ProfileToolImpl()
@@ -46,6 +47,7 @@ def test_profile_tool_uses_text_inputs_when_payload_missing() -> None:
         text_inputs=["hello", "world"],
         file_inputs=[],
         options={},
+        run_id="run-1",
     )
 
     tool = ProfileToolImpl()
@@ -85,6 +87,7 @@ def test_profile_tool_treats_conversion_failures_as_empty() -> None:
                 "certifications": [BadStr()],
             }
         },
+        run_id="run-1",
     )
 
     tool = ProfileToolImpl()

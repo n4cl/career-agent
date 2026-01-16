@@ -16,6 +16,7 @@ def test_default_workflow_runs_collect_and_validate() -> None:
         text_inputs=[],
         file_inputs=[],
         options={},
+        run_id="run-1",
     )
     state = run_default_workflow(context)
     assert state.context == context
@@ -32,6 +33,7 @@ def test_workflow_rejects_missing_job_inputs() -> None:
         text_inputs=[],
         file_inputs=[],
         options={},
+        run_id="run-1",
     )
     with pytest.raises(PreconditionError):
         run_default_workflow(context)

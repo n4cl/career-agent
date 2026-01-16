@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent_core.shared.conversation import ConversationStore
+from agent_core.shared.conversation import ConversationStore, build_log_record
 
 
 def test_conversation_store_appends_user_and_agent_blocks() -> None:
@@ -40,3 +40,21 @@ def test_conversation_store_rejects_unknown_role() -> None:
     store = ConversationStore()
     with pytest.raises(ValueError):
         store.append(role="system", content="nope")
+
+
+def test_conversation_store_builds_log_record() -> None:
+    """会話履歴がログレコードに反映される。"""
+    store = ConversationStore()
+    store.append(role="agent", content="質問1", metadata={"field": "career"})
+    store.append(role="user", content="回答1", metadata={"field": "career"})
+
+    record = build_log_record(store, run_id="run-99")
+
+    assert record.questions == ["質問1"]
+    assert record.input_refs == ["回答1"]
+    assert record.warnings == []
+    assert record.metadata["run_id"] == "run-99"
+    assert record.metadata["conversation"] == [
+        {"role": "agent", "content": "質問1", "metadata": {"field": "career"}},
+        {"role": "user", "content": "回答1", "metadata": {"field": "career"}},
+    ]

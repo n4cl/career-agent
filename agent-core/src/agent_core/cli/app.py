@@ -5,13 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import uuid
 
 import typer
 
 from agent_core.profile.profile_agent import InterviewQuestion, ProfileAgentImpl
 from agent_core.profile.profile_tool import ProfileToolImpl
 from agent_core.shared.context import ExecutionContext, build_execution_context
-from agent_core.shared.conversation import ConversationStore
+from agent_core.shared.conversation import ConversationStore, build_log_record
+from agent_core.shared.log_writer import JsonLineLogWriter
 
 app = typer.Typer()
 profile_app = typer.Typer()
@@ -24,6 +26,7 @@ _STOP_WORDS = {"exit", "quit"}
 class _InterviewState:
     payload: dict[str, Any]
     attempt: int
+    run_id: str
 
 
 def _seed_payload(text_inputs: list[str] | None) -> dict[str, Any]:
@@ -73,13 +76,26 @@ def _build_context(
     *,
     text_inputs: list[str] | None,
     payload: dict[str, Any],
+    run_id: str,
 ) -> ExecutionContext:
     return build_execution_context(
         mode="profile",
         text_inputs=text_inputs,
         file_inputs=None,
         options={"profile_payload": payload},
+        run_id=run_id,
     )
+
+
+def _write_conversation_log(
+    *,
+    store: ConversationStore,
+    run_id: str,
+    log_path: Path,
+) -> None:
+    record = build_log_record(store, run_id=run_id)
+    writer = JsonLineLogWriter(log_path=log_path, create_dirs=True)
+    writer.write(record)
 
 
 @profile_app.command("interview")
@@ -89,27 +105,40 @@ def profile_interview(
         Path("profiles/profile.json"),
         "--output",
     ),
+    log_path: Path = typer.Option(
+        Path("logs/profile_interview.jsonl"),
+        "--log-path",
+    ),
     max_attempts: int = typer.Option(3, "--max-attempts"),
     non_interactive: bool = typer.Option(False, "--non-interactive"),
 ) -> None:
     """プロフィールの対話補完を実行する。"""
     payload = _seed_payload(text_inputs)
-    state = _InterviewState(payload=payload, attempt=1)
+    state = _InterviewState(payload=payload, attempt=1, run_id=uuid.uuid4().hex)
 
     store = ConversationStore()
     tool = ProfileToolImpl(output_path=output)
     agent = ProfileAgentImpl(tool=tool, store=store, max_attempts=max_attempts)
 
     if non_interactive:
-        context = _build_context(text_inputs=text_inputs, payload=state.payload)
+        context = _build_context(
+            text_inputs=text_inputs,
+            payload=state.payload,
+            run_id=state.run_id,
+        )
         step = agent.run_step(context, answers=None, stop=True, attempt=state.attempt)
         assert step.result is not None
         _print_summary(status=step.result.status, missing=step.result.missing, output=output)
+        _write_conversation_log(store=store, run_id=state.run_id, log_path=log_path)
         return
 
     answers: dict[str, Any] | None = None
     while True:
-        context = _build_context(text_inputs=text_inputs, payload=state.payload)
+        context = _build_context(
+            text_inputs=text_inputs,
+            payload=state.payload,
+            run_id=state.run_id,
+        )
         step = agent.run_step(
             context,
             answers=answers,
@@ -123,12 +152,17 @@ def profile_interview(
                 missing=step.result.missing,
                 output=output,
             )
+            _write_conversation_log(store=store, run_id=state.run_id, log_path=log_path)
             return
 
         answers, stop = _prompt_answers(step.questions)
         _merge_payload(state.payload, answers)
         if stop:
-            context = _build_context(text_inputs=text_inputs, payload=state.payload)
+            context = _build_context(
+                text_inputs=text_inputs,
+                payload=state.payload,
+                run_id=state.run_id,
+            )
             final_step = agent.run_step(
                 context,
                 answers=answers or None,
@@ -141,6 +175,7 @@ def profile_interview(
                 missing=final_step.result.missing,
                 output=output,
             )
+            _write_conversation_log(store=store, run_id=state.run_id, log_path=log_path)
             return
 
         state.attempt += 1

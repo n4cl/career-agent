@@ -15,6 +15,7 @@ def test_guard_rejects_unintended_context_mutation() -> None:
         text_inputs=["a"],
         file_inputs=[],
         options={},
+        run_id="run-1",
     )
     state = WorkflowState(context=context)
 
@@ -24,6 +25,7 @@ def test_guard_rejects_unintended_context_mutation() -> None:
             text_inputs=["b"],
             file_inputs=[],
             options={},
+            run_id="run-1",
         )
         return WorkflowState(context=new_context, warnings=target.warnings)
 
@@ -39,6 +41,7 @@ def test_guard_allows_warning_updates() -> None:
         text_inputs=[],
         file_inputs=[],
         options={},
+        run_id="run-1",
     )
     state = WorkflowState(context=context)
 

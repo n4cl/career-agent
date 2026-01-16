@@ -16,6 +16,7 @@ def test_build_execution_context_normalizes_text_inputs() -> None:
         options={"interactive": True},
     )
     assert context.text_inputs == ["first", "second"]
+    assert context.run_id
 
 
 def test_build_execution_context_allows_empty_profile_inputs() -> None:
@@ -84,9 +85,23 @@ def test_execution_context_exports_view() -> None:
         text_inputs=["hello"],
         file_inputs=[],
         options={"interactive": True},
+        run_id="run-1",
     )
     payload = context.as_dict()
     assert payload["mode"] == "profile"
     assert payload["text_inputs"] == ["hello"]
     assert payload["file_inputs"] == []
     assert payload["options"] == {"interactive": True}
+    assert payload["run_id"] == "run-1"
+
+
+def test_build_execution_context_preserves_run_id() -> None:
+    """指定された run_id を保持する。"""
+    context = build_execution_context(
+        mode="profile",
+        text_inputs=["hello"],
+        file_inputs=None,
+        options=None,
+        run_id="run-42",
+    )
+    assert context.run_id == "run-42"

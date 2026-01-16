@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+import uuid
 
 from .preconditions import (
     PreconditionError,
@@ -21,6 +22,7 @@ class ExecutionContext:
     text_inputs: list[str]
     file_inputs: list[Any]
     options: dict[str, Any]
+    run_id: str
 
     def as_dict(self) -> dict[str, Any]:
         """コンテキストを辞書に変換する."""
@@ -29,6 +31,7 @@ class ExecutionContext:
             "text_inputs": list(self.text_inputs),
             "file_inputs": list(self.file_inputs),
             "options": dict(self.options),
+            "run_id": self.run_id,
         }
 
 
@@ -45,11 +48,15 @@ def build_execution_context(
     text_inputs: list[str] | None,
     file_inputs: list[Any] | None,
     options: dict[str, Any] | None,
+    run_id: str | None = None,
 ) -> ExecutionContext:
     """実行モードに応じたコンテキストを構築する."""
     normalized_texts = _normalize_text_inputs(text_inputs)
     normalized_files = list(file_inputs or [])
     normalized_options = dict(options or {})
+    resolved_run_id = run_id or normalized_options.get("run_id")
+    if not resolved_run_id:
+        resolved_run_id = uuid.uuid4().hex
 
     if mode == "profile":
         validate_profile_preconditions(
@@ -79,4 +86,5 @@ def build_execution_context(
         text_inputs=normalized_texts,
         file_inputs=normalized_files,
         options=normalized_options,
+        run_id=resolved_run_id,
     )

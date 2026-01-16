@@ -18,6 +18,7 @@ def test_profile_agent_returns_questions_without_finalizing(tmp_path: Path) -> N
         text_inputs=[],
         file_inputs=[],
         options={},
+        run_id="run-1",
     )
     store = ConversationStore()
     tool = ProfileToolImpl(output_path=tmp_path / "profile.json")
@@ -41,6 +42,7 @@ def test_profile_agent_records_answers_and_completes(tmp_path: Path) -> None:
         text_inputs=[],
         file_inputs=[],
         options={},
+        run_id="run-1",
     )
     store = ConversationStore()
     tool = ProfileToolImpl(output_path=tmp_path / "profile.json")
@@ -73,6 +75,7 @@ def test_profile_agent_re_evaluates_missing_after_partial_answer(
         text_inputs=[],
         file_inputs=[],
         options={},
+        run_id="run-1",
     )
     store = ConversationStore()
     tool = ProfileToolImpl(output_path=tmp_path / "profile.json")

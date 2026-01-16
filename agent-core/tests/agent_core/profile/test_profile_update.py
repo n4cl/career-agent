@@ -42,6 +42,7 @@ def test_update_merges_only_requested_sections(tmp_path: Path) -> None:
             "profile_payload": {"summary": "new summary"},
             "update_targets": ["summary"],
         },
+        run_id="run-1",
     )
 
     tool = ProfileToolImpl(output_path=profile_path)
@@ -62,6 +63,7 @@ def test_update_errors_when_profile_missing(tmp_path: Path) -> None:
         text_inputs=[],
         file_inputs=[],
         options={"update_targets": ["summary"]},
+        run_id="run-1",
     )
 
     tool = ProfileToolImpl(output_path=profile_path)
@@ -96,6 +98,7 @@ def test_update_warns_on_unknown_targets(tmp_path: Path) -> None:
             "profile_payload": {"summary": "updated"},
             "update_targets": ["unknown", "summary"],
         },
+        run_id="run-1",
     )
 
     tool = ProfileToolImpl(output_path=profile_path)

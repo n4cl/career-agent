@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from .log_writer import LogRecord
+
 Role = Literal["user", "agent"]
 
 
@@ -50,3 +52,20 @@ class ConversationStore:
     def list(self) -> list[ConversationBlock]:
         """保持している会話ブロックを返す。"""
         return list(self._blocks)
+
+
+def build_log_record(store: ConversationStore, *, run_id: str) -> LogRecord:
+    """会話履歴をログレコードに変換する。"""
+    blocks = store.list()
+    questions = [block.content for block in blocks if block.role == "agent"]
+    input_refs = [block.content for block in blocks if block.role == "user"]
+    conversation = [
+        {"role": block.role, "content": block.content, "metadata": dict(block.metadata)}
+        for block in blocks
+    ]
+    return LogRecord(
+        questions=questions,
+        warnings=[],
+        input_refs=input_refs,
+        metadata={"run_id": run_id, "conversation": conversation},
+    )

@@ -18,6 +18,7 @@ def test_core_service_exposes_profile_entrypoint() -> None:
         text_inputs=[],
         file_inputs=[],
         options={},
+        run_id="run-1",
     )
     result = service.run_profile(context)
     assert result.mode == "profile"
@@ -33,6 +34,7 @@ def test_core_service_exposes_job_entrypoint(tmp_path: Path) -> None:
         text_inputs=[],
         file_inputs=[job_file],
         options={},
+        run_id="run-1",
     )
     result = service.run_job(context)
     assert result.mode == "job"
@@ -50,6 +52,7 @@ def test_core_service_exposes_evaluate_entrypoint(tmp_path: Path) -> None:
         text_inputs=[],
         file_inputs=[],
         options={"profile_path": profile_path, "job_path": job_path},
+        run_id="run-1",
     )
     result = service.run_evaluate(context)
     assert result.mode == "evaluate"
@@ -63,6 +66,7 @@ def test_core_service_rejects_mismatched_context() -> None:
         text_inputs=[],
         file_inputs=[],
         options={},
+        run_id="run-1",
     )
     with pytest.raises(ValueError):
         service.run_profile(context)
