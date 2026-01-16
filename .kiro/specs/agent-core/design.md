@@ -80,7 +80,7 @@ graph TB
 | レイヤー | 選定 / バージョン | 役割 | 備考 |
 |-------|------------------|-----------------|-------|
 | フロントエンド / CLI | Typer >=0.20.0 | CLI 入力とバリデーション | Annotated 型を標準化 |
-| バックエンド / サービス | Python 3.13 | エージェント実行環境 | 型ヒント必須 |
+| バックエンド / サービス | Python 3.14 | エージェント実行環境 | 型ヒント必須 |
 | ワークフロー | LangGraph >=1.0.1 | ワークフローの状態管理 | StateGraph を使用 |
 | データ / ストレージ | ファイルベースJSON | プロフィール/求人/評価の保存 | UTF-8, 人間可読 |
 | 実行基盤 / ランタイム | ローカルプロセス | 単一ユーザー運用 | セッション管理は限定 |
@@ -196,6 +196,9 @@ sequenceDiagram
 - 入力の存在・読取可否を CLI 層で検証する
 - プロフィールは空入力でも開始できる
 - CLI はコアサービスを呼び出すアダプタとして振る舞う
+- プロフィール対話は CLI がインタラクティブにループを管理する
+- 非対話モードは一度の実行で未完了を保存し、再開時は既存プロフィールの読み込みで復元する
+- 対話の質問/回答は run_id 単位でログ領域に保存する
 
 **依存関係**
 - 受け取り: ユーザー — CLI 操作 (P0)
@@ -231,6 +234,7 @@ class CliEntrypoint(Protocol):
 - 入力順序を保持した正規化を行う
 - プロフィールでは空入力を許容し、空の入力集合で開始する
 - オプション値の既定値を補完する
+- run_id を発行し、ExecutionContext に格納する
 
 **依存関係**
 - 受け取り: CLI Commands — 入力受領 (P0)
@@ -257,6 +261,7 @@ class SessionBuilderService(Protocol):
 **責務と制約**
 - ユーザー入力とエージェント応答の 2 役割のみ許容
 - 時系列順序を保持し追記方式で記録する
+- 会話履歴はログ領域に run_id 単位で保存し、プロフィール成果物とは分離する
 
 **依存関係**
 - 受け取り: ProfileAgent / SessionBuilder — ブロック生成 (P1)
@@ -362,11 +367,31 @@ class ProfileTool(Protocol):
 ##### サービスインターフェース
 ```python
 class ProfileAgent(Protocol):
-    def run(self, context: ExecutionContext) -> ProfileResult: ...
+    def run_step(
+        self,
+        context: ExecutionContext,
+        answers: dict[str, object] | None,
+        stop: bool,
+        attempt: int,
+    ) -> ProfileInterviewResult: ...
 ```
 - 前提条件: 実行コンテキストが生成されている
-- 事後条件: 完了または未完了のプロフィールが返る
+- 事後条件: 質問一覧またはプロフィール結果が返る
 - 不変条件: 会話履歴に質問/回答が記録される
+
+**対話I/O方針**
+- 対話ループは CLI が管理し、ProfileAgent は質問生成/回答反映の単位処理を提供する
+- 非対話モードは未完了として保存し、復元は既存プロフィールの読み込みで行う
+
+##### 対話結果のデータ構造
+```python
+@dataclass(frozen=True)
+class ProfileInterviewResult:
+    status: Literal["in_progress", "complete"]
+    questions: list[InterviewQuestion]
+    result: ProfileResult | None
+    missing: list[str]
+```
 
 ### 求人ドメイン
 
@@ -519,6 +544,7 @@ class StoragePort(Protocol):
 **責務と制約**
 - 質問・警告・入力参照を記録する
 - 機微情報はマスク方針に従う
+- 対話ログは run_id を付与して保存する
 
 **依存関係**
 - 受け取り: 各サービス — ログ要求 (P0)
@@ -538,7 +564,8 @@ class LogWriter(Protocol):
 ## データモデル
 
 ### ドメインモデル
-- ExecutionContext: 入力、モード、オプションを保持する実行単位
+- ExecutionContext: 入力、モード、オプション、run_id を保持する実行単位
+- RunId: 対話ログを識別する実行ID
 - ConversationBlock: 役割と内容を持つ会話履歴
 - ProfileDraft / ProfileResult: 欠損情報と年齢帯/都道府県/資格を含むプロフィール成果物
 - JobResult: 求人情報と会社情報セクションを含む成果物
