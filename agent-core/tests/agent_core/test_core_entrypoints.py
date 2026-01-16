@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from agent_core.core import CoreAgentService
-from agent_core.context import ExecutionContext
+from agent_core.shared.context import ExecutionContext
 
 
 def test_core_service_exposes_profile_entrypoint() -> None:

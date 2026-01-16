@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from agent_core.context import ExecutionContext
-from agent_core.preconditions import PreconditionError
-from agent_core.workflow import run_default_workflow
+from agent_core.shared.context import ExecutionContext
+from agent_core.shared.preconditions import PreconditionError
+from agent_core.shared.workflow import run_default_workflow
 
 
 def test_default_workflow_runs_collect_and_validate() -> None:

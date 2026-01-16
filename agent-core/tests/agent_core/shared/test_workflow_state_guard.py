@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from agent_core.context import ExecutionContext
-from agent_core.workflow import WorkflowState, guard_node
+from agent_core.shared.context import ExecutionContext
+from agent_core.shared.workflow import WorkflowState, guard_node
 
 
 def test_guard_rejects_unintended_context_mutation() -> None:

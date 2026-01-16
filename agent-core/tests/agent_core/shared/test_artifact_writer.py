@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from agent_core.artifact_writer import save_json_artifact
+from agent_core.shared.artifact_writer import save_json_artifact
 
 
 def test_artifact_writer_saves_human_readable_utf8(tmp_path: Path) -> None:

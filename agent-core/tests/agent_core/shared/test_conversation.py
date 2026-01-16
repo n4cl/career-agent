@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent_core.conversation import ConversationStore
+from agent_core.shared.conversation import ConversationStore
 
 
 def test_conversation_store_appends_user_and_agent_blocks() -> None:

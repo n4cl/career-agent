@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from agent_core.context import ExecutionContext
-from agent_core.profile_tool import ProfileToolImpl
+from agent_core.shared.context import ExecutionContext
+from agent_core.profile.profile_tool import ProfileToolImpl
 
 
 def test_profile_tool_builds_structured_profile_from_payload() -> None:

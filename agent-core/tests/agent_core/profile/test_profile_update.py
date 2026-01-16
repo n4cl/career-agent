@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from agent_core.context import ExecutionContext
-from agent_core.profile_tool import ProfileToolImpl
+from agent_core.shared.context import ExecutionContext
+from agent_core.profile.profile_tool import ProfileToolImpl
 
 
 def _save_profile(path: Path, payload: dict[str, object]) -> None:

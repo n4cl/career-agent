@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_core.storage import FileStorage, StorageError
+from agent_core.shared.storage import FileStorage, StorageError
 
 
 def test_storage_rejects_overwrite_when_disabled(tmp_path: Path) -> None:

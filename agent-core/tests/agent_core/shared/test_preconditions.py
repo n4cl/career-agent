@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_core.preconditions import (
+from agent_core.shared.preconditions import (
     PreconditionError,
     validate_evaluate_preconditions,
     validate_job_preconditions,

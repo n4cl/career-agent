@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .context import ExecutionContext
-from .conversation import ConversationStore
+from ..shared.context import ExecutionContext
+from ..shared.conversation import ConversationStore
 from .profile_tool import ProfileDraft, ProfileResult, ProfileToolImpl, detect_missing
 from .prompts import profile_question
 

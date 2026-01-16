@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_core.log_writer import (
+from agent_core.shared.log_writer import (
     JsonLineLogWriter,
     LogRecord,
     LogWriteError,

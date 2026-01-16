@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from agent_core.context import ExecutionContext
-from agent_core.conversation import ConversationStore
-from agent_core.profile_agent import ProfileAgentImpl
-from agent_core.profile_tool import ProfileToolImpl
+from agent_core.shared.context import ExecutionContext
+from agent_core.shared.conversation import ConversationStore
+from agent_core.profile.profile_agent import ProfileAgentImpl
+from agent_core.profile.profile_tool import ProfileToolImpl
 
 
 def test_profile_agent_starts_interview_on_empty_input(tmp_path: Path) -> None:

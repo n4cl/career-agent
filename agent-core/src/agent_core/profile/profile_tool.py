@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Mapping
-import json
 
-from .artifact_writer import save_json_artifact
-
-from .context import ExecutionContext
+from ..shared.artifact_writer import save_json_artifact
+from ..shared.context import ExecutionContext
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent_core.context import ExecutionContext, build_execution_context
+from agent_core.shared.context import ExecutionContext, build_execution_context
 
 
 def test_build_execution_context_normalizes_text_inputs() -> None:

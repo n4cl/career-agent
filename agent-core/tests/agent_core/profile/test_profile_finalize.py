@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from agent_core.profile_tool import ProfileDraft, ProfileToolImpl
+from agent_core.profile.profile_tool import ProfileDraft, ProfileToolImpl
 
 
 def test_finalize_allows_empty_summary_when_career_present(tmp_path: Path) -> None:

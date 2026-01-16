@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agent_core.prompts import profile_question
+from agent_core.profile.prompts import profile_question
 
 
 def test_profile_question_returns_known_prompt() -> None:
